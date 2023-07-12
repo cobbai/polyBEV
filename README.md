@@ -11,3 +11,5 @@ cd docker && docker build . -t bevfusion
 ```bash
 python setup.py develop
 ```
+
+3.测试以下
