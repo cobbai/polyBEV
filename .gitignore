@@ -10,7 +10,7 @@ __pycache__/
 .Python
 build/
 data/
-pretrained
+pretrained/
 develop-eggs/
 dist/
 downloads/
