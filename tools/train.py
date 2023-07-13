@@ -18,19 +18,17 @@ from mmdet3d.utils import get_root_logger, convert_sync_batchnorm, recursive_eva
 
 
 def main():
+    dist.init()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE", help="config file")
     parser.add_argument("--run-dir", metavar="DIR", help="run directory")
-    parser.add_argument("--dist", action="store_true", default=False, help="train distributed")
     args, opts = parser.parse_known_args()
 
     configs.load(args.config, recursive=True)
     configs.update(opts)
 
     cfg = Config(recursive_eval(configs), filename=args.config)
-    cfg.dist = args.dist
-
-    if cfg.dist: dist.init()
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
     torch.cuda.set_device(dist.local_rank())

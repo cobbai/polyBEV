@@ -1,5 +1,5 @@
 import torch
-from mmcv.parallel import MMDistributedDataParallel, MMDataParallel
+from mmcv.parallel import MMDistributedDataParallel
 from mmcv.runner import (
     DistSamplerSeedHook,
     EpochBasedRunner,
@@ -45,15 +45,12 @@ def train_model(
     find_unused_parameters = cfg.get("find_unused_parameters", False)
     # Sets the `find_unused_parameters` parameter in
     # torch.nn.parallel.DistributedDataParallel
-    if cfg.dist:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-            find_unused_parameters=find_unused_parameters,
-        )
-    else:
-        model = MMDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()])
+    model = MMDistributedDataParallel(
+        model.cuda(),
+        device_ids=[torch.cuda.current_device()],
+        broadcast_buffers=False,
+        find_unused_parameters=find_unused_parameters,
+    )
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
