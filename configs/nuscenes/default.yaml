@@ -1,5 +1,5 @@
 dataset_type: NuScenesDataset
-dataset_root: data/nuscenes/
+dataset_root: /home/polyBEV/data/nuscenes/
 gt_paste_stop_epoch: -1
 reduce_beams: 32
 load_dim: 5
@@ -8,7 +8,7 @@ load_augmented: null
 
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size: [0.1, 0.1, 0.2]
-image_size: [256, 704]
+image_size: [128, 352]  # TODO: debug [256, 704]  [128, 352]
 
 augment2d:
   resize: [[0.38, 0.55], [0.48, 0.48]]
