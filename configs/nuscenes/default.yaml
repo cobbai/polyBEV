@@ -8,7 +8,7 @@ load_augmented: null
 
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size: [0.1, 0.1, 0.2]
-image_size: [256, 704]
+image_size: [128, 352]  # TODO: debug [256, 704]  [128, 352]
 
 augment2d:
   resize: [[0.38, 0.55], [0.48, 0.48]]
@@ -258,7 +258,7 @@ test_pipeline:
       - lidar_aug_matrix
 
 data:
-  samples_per_gpu: 4
+  samples_per_gpu: 1
   workers_per_gpu: 4
   train:
     type: CBGSDataset
