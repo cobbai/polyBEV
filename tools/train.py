@@ -26,8 +26,8 @@ def main():
 
     configs.load(args.config, recursive=True)
     configs.update(opts)
-
     cfg = Config(recursive_eval(configs), filename=args.config)
+
     cfg.dist = args.dist
     if cfg.dist: dist.init()
 
