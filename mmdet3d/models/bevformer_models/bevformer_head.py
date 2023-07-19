@@ -260,6 +260,7 @@ class BEVFormerHead(DETRHead):
                                device=bev_queries.device).to(dtype)
         bev_pos = self.positional_encoding(bev_mask).to(dtype)
 
+        # PerceptionTransformer
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
             return self.transformer.get_bev_features(
                 mlvl_feats,
@@ -331,7 +332,7 @@ class BEVFormerHead(DETRHead):
             
             # crop 分割区域并插值到分割标注的尺寸
             seg_bev = self.feat_cropper(seg_bev)
-            # 这里要注意特征图大小
+            # SegEncode 这里要注意特征图大小
             seg_pred = self.seg_decoder(seg_bev)
 
         if self.task.get('det'):
