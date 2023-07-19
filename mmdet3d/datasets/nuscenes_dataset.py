@@ -137,6 +137,7 @@ class NuScenesDataset(Custom3DDataset):
         test_mode=False,
         eval_version="detection_cvpr_2019",
         use_valid_flag=False,
+        **kwargs
     ) -> None:
         self.load_interval = load_interval
         self.use_valid_flag = use_valid_flag
