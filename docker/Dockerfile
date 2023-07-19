@@ -17,7 +17,7 @@ RUN conda install pytorch==1.9.1 torchvision==0.10.2 torchaudio==0.9.1 cudatoolk
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple Pillow==8.4.0
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple tqdm
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple torchpack
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple mmcv==1.4.0 mmcv-full==1.4.0 mmdet==2.20.0
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple mmcv==1.4.0 mmcv-full==1.4.0 mmdet==2.20.0 mmsegmentation==0.20.0
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple nuscenes-devkit
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple mpi4py==3.0.3
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple numba==0.48.0
