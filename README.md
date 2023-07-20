@@ -4,7 +4,7 @@
 
 ### 1.build docker
 ```bash
-cd docker && docker build . -t bevfusion
+cd docker && docker build . -t polyBEV
 ```
 
 ### 2.docker run

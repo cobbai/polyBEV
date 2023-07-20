@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.3.1-devel-ubuntu20.04
+FROM nvidia/cuda:11.1.1-devel-ubuntu20.04
 
 RUN apt-get update && apt-get install wget -yq
 RUN apt-get install build-essential g++ gcc -y
@@ -13,18 +13,21 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 # Put conda in path so we can use conda activate
 ENV PATH=$CONDA_DIR/bin:$PATH
 RUN conda install python=3.8
-RUN conda install pytorch==1.9.1 torchvision==0.10.2 torchaudio==0.9.1 cudatoolkit=11.3 -c pytorch
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple Pillow==8.4.0
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple tqdm
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple torchpack
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple mmcv==1.4.0 mmcv-full==1.4.0 mmdet==2.20.0 mmsegmentation==0.20.0
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple nuscenes-devkit
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple mpi4py==3.0.3
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple numba==0.48.0
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple numpy==1.19.5
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple setuptools==59.5.0
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple networkx==2.2
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple trimesh==2.35.39
+RUN conda install cudatoolkit=11.1
+RUN #conda install pytorch==1.10.1 torchvision==0.11.2 torchaudio==0.10.1 cudatoolkit=11.3 -c pytorch
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ torch==1.9.1+cu111 torchvision==0.10.1+cu111 torchaudio==0.9.1 -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ Pillow==8.4.0
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ tqdm
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ torchpack
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ mmcv-full==1.4.0 -f https://download.openmmlab.com/mmcv/dist/cu111/torch1.9.1/index.html
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ mmdet==2.20.0 mmsegmentation==0.20.0
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ nuscenes-devkit
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ mpi4py==3.0.3
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ numba==0.48.0
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ numpy==1.19.5
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ setuptools==59.5.0
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ networkx==2.2
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ trimesh==2.35.39
 
 RUN apt-get update
 RUN apt-get install -y vim

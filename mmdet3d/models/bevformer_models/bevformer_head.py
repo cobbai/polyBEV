@@ -14,8 +14,8 @@ from mmdet3d.core.bbox.coders import build_bbox_coder
 from mmcv.runner import force_fp32, auto_fp16
 # from ..modules.builder import build_seg_encoder
 from mmdet3d.models.builder import build_head as build_seg_encoder
-from mmdet.models.builder import build_loss
-# from mmseg.models.builder import build_loss
+# from mmdet.models.builder import build_loss
+from mmseg.models.builder import build_loss
 
 
 def normalize_bbox(bboxes, pc_range):
@@ -289,6 +289,10 @@ class BEVFormerHead(DETRHead):
                 prev_bev=prev_bev
         )
 
+        # bev_embed: encoder output
+        # hs: decoder output
+        # inter_references: encoder ref_points
+        # inter_references: decoder ref_points
         bev_embed, hs, init_reference, inter_references = outputs
 
         # add segmentation task
