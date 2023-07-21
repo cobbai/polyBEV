@@ -10,34 +10,12 @@ from mmdet.models.utils.transformer import inverse_sigmoid
 from mmdet.models import HEADS
 from mmdet.models.dense_heads import DETRHead
 from mmdet3d.core.bbox.coders import build_bbox_coder
-# from projects.mmdet3d_plugin.core.bbox.util import normalize_bbox
+from mmdet3d.core.bbox.util import normalize_bbox
 from mmcv.runner import force_fp32, auto_fp16
 # from ..modules.builder import build_seg_encoder
-from mmdet3d.models.builder import build_head as build_seg_encoder
+from mmdet3d.models.builder import build_seg_encoder
 # from mmdet.models.builder import build_loss
 from mmseg.models.builder import build_loss
-
-
-def normalize_bbox(bboxes, pc_range):
-    cx = bboxes[..., 0:1]
-    cy = bboxes[..., 1:2]
-    cz = bboxes[..., 2:3]
-    w = bboxes[..., 3:4].log()
-    l = bboxes[..., 4:5].log()
-    h = bboxes[..., 5:6].log()
-
-    rot = bboxes[..., 6:7]
-    if bboxes.size(-1) > 7:
-        vx = bboxes[..., 7:8]
-        vy = bboxes[..., 8:9]
-        normalized_bboxes = torch.cat(
-            (cx, cy, w, l, cz, h, rot.sin(), rot.cos(), vx, vy), dim=-1
-        )
-    else:
-        normalized_bboxes = torch.cat(
-            (cx, cy, w, l, cz, h, rot.sin(), rot.cos()), dim=-1
-        )
-    return normalized_bboxes
 
 
 def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):

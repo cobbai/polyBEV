@@ -1,4 +1,4 @@
-from mmcv.utils import Registry
+from mmcv.utils import Registry, build_from_cfg
 
 from mmdet.models.builder import BACKBONES, HEADS, LOSSES, NECKS
 
@@ -6,6 +6,7 @@ FUSIONMODELS = Registry("fusion_models")
 BEVFORMERMODELS = Registry("fusion_models")
 VTRANSFORMS = Registry("vtransforms")
 FUSERS = Registry("fusers")
+SEG_ENCODER = Registry('seg_encoder')
 
 
 def build_backbone(cfg):
@@ -30,6 +31,11 @@ def build_head(cfg):
 
 def build_loss(cfg):
     return LOSSES.build(cfg)
+
+
+def build_seg_encoder(cfg, **default_args):
+    """Builder of box sampler."""
+    return build_from_cfg(cfg, SEG_ENCODER, default_args)
 
 
 def build_fusion_model(cfg, train_cfg=None, test_cfg=None):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from torchvision.models.resnet import resnet18
-from mmdet.models import HEADS
+from mmdet3d.models.builder import SEG_ENCODER
 
 
 class Up(nn.Module):
@@ -23,10 +23,11 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        x1 = torch.cat([x2, x1], dim=1) #相当与通道维度上连接，以弥补因为使用mb导致的卷积信息丢失。
+        x1 = torch.cat([x2, x1], dim=1)  # 相当与通道维度上连接，以弥补因为使用mb导致的卷积信息丢失。
         return self.conv(x1)
 
-@HEADS.register_module()
+
+@SEG_ENCODER.register_module()
 class SegEncode(nn.Module):
     def __init__(self, inC, outC):
         super(SegEncode, self).__init__()
@@ -48,22 +49,22 @@ class SegEncode(nn.Module):
             nn.Conv2d(128, outC, kernel_size=1, padding=0),
         )
 
-    def forward(self, x): #torch.Size([2, 256, 200, 400])
-        x = self.conv1(x) #torch.Size([2, 64, 200, 400])
+    def forward(self, x):  # torch.Size([2, 256, 200, 400])
+        x = self.conv1(x)  # torch.Size([2, 64, 200, 400])
         x = self.bn1(x)
         x = self.relu(x)
 
-        x1 = self.layer1(x) #torch.Size([2, 64, 100, 200])
-        x = self.layer2(x1) #torch.Size([2, 128, 50, 100])
-        x2 = self.layer3(x) #torch.Size([2, 256, 25, 50])
+        x1 = self.layer1(x)  # torch.Size([2, 64, 100, 200])
+        x = self.layer2(x1)  # torch.Size([2, 128, 50, 100])
+        x2 = self.layer3(x)  # torch.Size([2, 256, 25, 50])
 
-        x = self.up1(x2, x1) #torch.Size([2, 256, 100, 200])
-        x = self.up2(x) #torch.Size([2, 4, 200, 400]) 语义分割预测特征图
+        x = self.up1(x2, x1)  # torch.Size([2, 256, 100, 200])
+        x = self.up2(x)  # torch.Size([2, 4, 200, 400]) 语义分割预测特征图
 
         return x
 
 
-@HEADS.register_module()
+@SEG_ENCODER.register_module()
 class SegEncode_v1(nn.Module):
 
     def __init__(self, inC, outC):
@@ -71,20 +72,19 @@ class SegEncode_v1(nn.Module):
         self.seg_head = nn.Sequential(
             nn.Conv2d(inC, inC, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(inC, outC , kernel_size=1))
+            nn.Conv2d(inC, outC, kernel_size=1))
 
     def forward(self, x):
-
         return self.seg_head(x)
 
 
 import math
 import torch.nn as nn
 from mmcv.cnn import ConvModule
-from mmcv.runner import BaseModule, auto_fp16
+from mmcv.runner import BaseModule, auto_fp16, force_fp32
 
 
-@HEADS.register_module()
+@SEG_ENCODER.register_module()
 class DeconvEncode(BaseModule):
     """The neck used in `CenterNet <https://arxiv.org/abs/1904.07850>`_ for
     object classification and box regression.
