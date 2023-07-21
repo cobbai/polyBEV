@@ -49,4 +49,4 @@ ENV LANG C.UTF-8
 CMD ["/usr/sbin/sshd", "-D"]
 WORKDIR /home/
 
-# sudo docker run -it -v `pwd`/../bevfusion:/home/bevfusion -p 10001:22 --gpus all --shm-size 16g bevfusion /bin/bash
+# sudo docker run -it -v `pwd`/../bevfusion:/home/bevfusion -p 10001:22 --gpus all --shm-size 16g polybev /bin/bash
