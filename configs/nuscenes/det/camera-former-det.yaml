@@ -35,6 +35,7 @@ TemporalSelfAttention:
   type: TemporalSelfAttention
   embed_dims: ${_dim_}
   num_levels: 1
+
 SpatialCrossAttention:
   type: SpatialCrossAttention
   pc_range: ${point_cloud_range}
@@ -44,6 +45,17 @@ SpatialCrossAttention:
     num_points: 8
     num_levels: ${_num_levels_}
   embed_dims: ${_dim_}
+
+MultiheadAttention:
+  type: MultiheadAttention
+  embed_dims: ${_dim_}
+  num_heads: 8
+  dropout: 0.1
+
+CustomMSDeformableAttention:
+  type: CustomMSDeformableAttention
+  embed_dims: ${_dim_}
+  num_levels: 1
 
 model:
   type: BEVFormer
@@ -86,22 +98,11 @@ model:
     num_classes: 10
     in_channels: ${_dim_}
     sync_cls_avg_factor: True
-    with_box_refine: False
+    with_box_refine: True
     as_two_stage: False
     task:
-      seg: True
-      det: False
-    det_grid_conf: ${det_grid_conf}
-    map_grid_conf: ${map_grid_conf}
-    seg_encoder:
-      type: SegEncode
-      inC: 256
-      outC: 4
-    loss_seg:
-      type: CrossEntropyLoss
-      use_sigmoid: False
-      loss_weight: 3.0
-      class_weight: [ 0.5, 2.0, 2.0, 2.0 ]
+      seg: False
+      det: True
     transformer:
       type: PerceptionTransformer
       rotate_prev_bev: True
@@ -120,6 +121,16 @@ model:
           feedforward_channels: ${_ffn_dim_}
           ffn_dropout: 0.1
           operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
+      decoder:
+        type: DetectionTransformerDecoder
+        num_layers: 6
+        return_intermediate: True
+        transformerlayers:
+          type: DetrTransformerDecoderLayer
+          attn_cfgs: ${[MultiheadAttention, CustomMSDeformableAttention]}
+          feedforward_channels: ${_ffn_dim_}
+          ffn_dropout: 0.1
+          operation_order: [ 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm' ]
     bbox_coder:
       type: NMSFreeCoder
       post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
@@ -202,7 +213,7 @@ train_pipeline:
     class_names: ${object_classes}
   -
     type: CustomCollect3D
-    keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img', 'semantic_indices']
+    keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img']
 
 test_pipeline:
   -
