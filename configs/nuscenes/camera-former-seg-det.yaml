@@ -22,14 +22,14 @@ map_grid_conf:
   dbound: [1.0, 60.0, 1.0]
 
 grid_conf: ${map_grid_conf}
-bev_h_: 50
-bev_w_: 50
+bev_h_: 150
+bev_w_: 150
 bev_size: ${[bev_h_, bev_w_]}
-queue_length: 3
+queue_length: 4
 _dim_: 256
 _pos_dim_: ${_dim_ // 2}
 _ffn_dim_: ${_dim_ * 2}
-_num_levels_: 1
+_num_levels_: 4
 
 TemporalSelfAttention:
   type: TemporalSelfAttention
@@ -44,6 +44,15 @@ SpatialCrossAttention:
     num_points: 8
     num_levels: ${_num_levels_}
   embed_dims: ${_dim_}
+MultiheadAttention:
+  type: MultiheadAttention
+  embed_dims: ${_dim_}
+  num_heads: 8
+  dropout: 0.1
+CustomMSDeformableAttention:
+  type: CustomMSDeformableAttention
+  embed_dims: ${_dim_}
+  num_levels: 1
 
 model:
   type: BEVFormer
@@ -53,25 +62,21 @@ model:
     type: ResNet
     depth: 101
     num_stages: 4
-    out_indices: [3]
+    out_indices: [1, 2, 3]
     frozen_stages: 1
     norm_cfg:
       type: BN2d
       requires_grad: False
     norm_eval: True
-    style: pytorch
-    with_cp: True
+    style: caffe
     dcn:
       type: DCNv2
       deform_groups: 1
       fallback_on_stride: False
     stage_with_dcn: [False, False, True, True]
-#        init_cfg:
-#          type: Pretrained
-#          checkpoint: https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
   img_neck:
     type: FPN
-    in_channels: [2048]
+    in_channels: [512, 1024, 2048]
     out_channels: ${_dim_}
     start_level: 0
     add_extra_convs: on_output
@@ -84,11 +89,11 @@ model:
     num_classes: 10
     in_channels: ${_dim_}
     sync_cls_avg_factor: True
-    with_box_refine: False
+    with_box_refine: True
     as_two_stage: False
     task:
       seg: True
-      det: False
+      det: True
     det_grid_conf: ${det_grid_conf}
     map_grid_conf: ${map_grid_conf}
     seg_encoder:
@@ -108,7 +113,7 @@ model:
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
-        num_layers: 3
+        num_layers: 6
         pc_range: ${point_cloud_range}
         num_points_in_pillar: 4
         return_intermediate: False
@@ -118,6 +123,16 @@ model:
           feedforward_channels: ${_ffn_dim_}
           ffn_dropout: 0.1
           operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
+      decoder:
+        type: DetectionTransformerDecoder
+        num_layers: 6
+        return_intermediate: True
+        transformerlayers:
+          type: DetrTransformerDecoderLayer
+          attn_cfgs: ${[MultiheadAttention, CustomMSDeformableAttention]}
+          feedforward_channels: ${_ffn_dim_}
+          ffn_dropout: 0.1
+          operation_order: [ 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm' ]
     bbox_coder:
       type: NMSFreeCoder
       post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
@@ -191,7 +206,7 @@ train_pipeline:
     to_rgb: False
   -
     type: RandomScaleImageMultiViewImage
-    scales: [0.2]
+    scales: [0.5]
   -
     type: PadMultiViewImage
     size_divisor: 32
@@ -215,6 +230,9 @@ test_pipeline:
     std: [1.0, 1.0, 1.0]
     to_rgb: False
   -
+    type: PadMultiViewImage
+    size_divisor: 32
+  -
     type: MultiScaleFlipAug3D
     img_scale: [1600, 900]
     pts_scale_ratio: 1
@@ -222,10 +240,7 @@ test_pipeline:
     transforms:
       -
         type: RandomScaleImageMultiViewImage
-        scales: [ 0.2 ]
-      -
-        type: PadMultiViewImage
-        size_divisor: 32
+        scales: [ 0.5 ]
       -
         type: DefaultFormatBundle3D_2
         class_names: ${object_classes}

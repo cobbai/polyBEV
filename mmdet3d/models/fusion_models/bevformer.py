@@ -174,7 +174,7 @@ class BEVFormer(MVXTwoStageDetector):
             prev_bev = None
             bs, len_queue, num_cams, C, H, W = imgs_queue.shape
             imgs_queue = imgs_queue.reshape(bs*len_queue, num_cams, C, H, W)
-            img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue)
+            img_feats_list = self.extract_feat(img=imgs_queue, len_queue=len_queue)  # backbone + neck
             for i in range(len_queue): # 循环融合
                 img_metas = [each[i] for each in img_metas_list]
                 if not img_metas[0]['prev_bev_exists']:
@@ -236,12 +236,12 @@ class BEVFormer(MVXTwoStageDetector):
         img = img[:, -1, ...] #当前时刻图像
 
         prev_img_metas = copy.deepcopy(img_metas) # 这里没写好吧，但是影响不大
-        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) # 获取前一帧的bev特征
+        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) # 获取前3帧的bev特征
 
         img_metas = [each[len_queue-1] for each in img_metas]
         if not img_metas[0]['prev_bev_exists']:
             prev_bev = None
-        img_feats = self.extract_feat(img=img, img_metas=img_metas)   # 提取当前图像特征
+        img_feats = self.extract_feat(img=img, img_metas=img_metas)   # 提取当前图像特征 backbone + neck
         losses = dict()
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, semantic_indices,

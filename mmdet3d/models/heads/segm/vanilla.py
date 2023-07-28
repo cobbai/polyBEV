@@ -74,7 +74,7 @@ class BEVGridTransform(nn.Module):
             v = (v - imin) / (imax - imin) * 2 - 1
             coords.append(v.to(x.device))
 
-        u, v = torch.meshgrid(coords, indexing="ij")
+        u, v = torch.meshgrid(coords)
         grid = torch.stack([v, u], dim=-1)
         grid = torch.stack([grid] * x.shape[0], dim=0)
 
