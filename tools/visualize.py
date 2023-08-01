@@ -6,11 +6,12 @@ import mmcv
 import numpy as np
 import torch
 from mmcv import Config
-from mmcv.parallel import MMDistributedDataParallel
-from mmcv.runner import load_checkpoint
+from mmcv.parallel import MMDistributedDataParallel, MMDataParallel
+from mmcv.runner import load_checkpoint, wrap_fp16_model
 from torchpack import distributed as dist
 from torchpack.utils.config import configs
-from torchpack.utils.tqdm import tqdm
+# from torchpack.utils.tqdm import tqdm
+import tqdm
 
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
@@ -36,12 +37,11 @@ def recursive_eval(obj, globals=None):
 
 
 def main() -> None:
-    dist.init()
-
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
     parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred"])
     parser.add_argument("--checkpoint", type=str, default=None)
+    parser.add_argument("--dist", action="store_true", default=False, help="train distributed")
     parser.add_argument("--split", type=str, default="val", choices=["train", "val"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
     parser.add_argument("--bbox-score", type=float, default=None)
@@ -53,6 +53,9 @@ def main() -> None:
     configs.update(opts)
 
     cfg = Config(recursive_eval(configs), filename=args.config)
+
+    cfg.dist = args.dist
+    if cfg.dist: dist.init()
 
     torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
     torch.cuda.set_device(dist.local_rank())
@@ -70,16 +73,21 @@ def main() -> None:
     # build the model and load checkpoint
     if args.mode == "pred":
         model = build_model(cfg.model)
+        fp16_cfg = cfg.get("fp16", None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
         load_checkpoint(model, args.checkpoint, map_location="cpu")
-
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False,
-        )
+        if cfg.dist:
+            model = MMDistributedDataParallel(
+                model.cuda(),
+                device_ids=[torch.cuda.current_device()],
+                broadcast_buffers=False,
+            )
+        else:
+            model = MMDataParallel(model, device_ids=[0])
         model.eval()
 
-    for data in tqdm(dataflow):
+    for data in dataflow:
         metas = data["metas"].data[0][0]
         name = "{}-{}".format(metas["timestamp"], metas["token"])
 

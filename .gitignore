@@ -12,6 +12,7 @@ build/
 data/
 pretrained/
 runs/
+viz/
 develop-eggs/
 dist/
 downloads/
