@@ -1,3 +1,5 @@
+import time
+import os.path as osp
 import torch
 from mmcv.parallel import MMDistributedDataParallel, MMDataParallel
 from mmcv.runner import (
@@ -119,6 +121,7 @@ def train_model(
         )
         eval_cfg = cfg.get("evaluation", {})
         eval_cfg["by_epoch"] = cfg.runner["type"] != "IterBasedRunner"
+        eval_cfg['jsonfile_prefix'] = osp.join(cfg.run_dir, "val")
         eval_hook = DistEvalHook if distributed else EvalHook
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 

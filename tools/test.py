@@ -1,6 +1,7 @@
 import argparse
 import copy
 import os
+import time
 import warnings
 
 import mmcv
@@ -213,6 +214,8 @@ def main():
             print(f"\nwriting results to {args.out}")
             mmcv.dump(outputs, args.out)
         kwargs = {} if args.eval_options is None else args.eval_options
+        if not os.path.exists("./runs"): os.mkdir("./runs")
+        kwargs['jsonfile_prefix'] = os.path.join('runs', time.ctime().replace(' ', '_').replace(':', '_'))
         if args.format_only:
             dataset.format_results(outputs, **kwargs)
         if args.eval:

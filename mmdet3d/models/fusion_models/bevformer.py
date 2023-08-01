@@ -317,7 +317,7 @@ class BEVFormer(MVXTwoStageDetector):
 
             return outs['bev_embed'], outs['seg_preds'], bbox_results
 
-    def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False):
+    def simple_test(self, img_metas, img=None, prev_bev=None, rescale=False, **kwargs):
         """Test function without augmentaiton."""
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
 
@@ -336,10 +336,14 @@ class BEVFormer(MVXTwoStageDetector):
             for result_dict in result_list:
                 result_dict['pts_bbox'] = None
                 result_dict['seg_preds'] = seg_preds
+                if "semantic_indices" in kwargs: 
+                    result_dict['semantic_indices'] = kwargs['semantic_indices']
         # 3. muti task
         else:
             for result_dict, pts_bbox in zip(result_list, bbox_pts):
                 result_dict['pts_bbox'] = pts_bbox
                 result_dict['seg_preds'] = seg_preds
+                if "semantic_indices" in kwargs: 
+                    result_dict['semantic_indices'] = kwargs['semantic_indices']
 
         return new_prev_bev, result_list

@@ -232,7 +232,7 @@ test_pipeline:
         with_label: False
       -
         type: CustomCollect3D
-        keys: ['img']
+        keys: ['img', 'semantic_indices']
 
 data:
   samples_per_gpu: 1

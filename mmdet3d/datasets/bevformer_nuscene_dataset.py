@@ -13,6 +13,14 @@ from .builder import DATASETS
 from .nuscenes_dataset import NuScenesDataset
 from ..utils import VectorizedLocalMap
 from ..utils import NuScenesEval_custom
+from mmdet3d.metrics import IntersectionOverUnion
+
+
+def onehot_encoding(logits, dim=1):
+    max_idx = torch.argmax(logits, dim, keepdim=True)
+    one_hot = logits.new_full(logits.shape, 0)
+    one_hot.scatter_(dim, max_idx, 1)
+    return one_hot
 
 
 @DATASETS.register_module()
@@ -332,7 +340,7 @@ class CustomNuScenesDataset(NuScenesDataset):
             # should take the inner dict out of 'pts_bbox' or 'img_bbox' dict
             result_files = dict()
             for name in results[0]:
-                if name == 'seg_preds':
+                if name == 'seg_preds' or name == 'semantic_indices':
                     pass
                     #print(f'\nCalculate seg iou from {name}')
                     # 怎么计算iou？如何获得gt label？
@@ -343,6 +351,65 @@ class CustomNuScenesDataset(NuScenesDataset):
                     result_files.update(
                         {name: self._format_bbox(results_, tmp_file_)})
         return result_files, tmp_dir
+
+    def evaluate(
+        self,
+        results,
+        metric="bbox",
+        jsonfile_prefix=None,
+        result_names=["pts_bbox"],
+        **kwargs,
+    ):
+        """
+            Custom evaluation
+        """
+        metrics = {}
+
+        if (results[0]['seg_preds'] is not None) and ("semantic_indices" in results[0]):
+            metrics.update(self.evaluate_seg(results))
+
+        if results[0]['pts_bbox'] is not None:
+            result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
+
+            if isinstance(result_files, dict):
+                for name in result_names:
+                    print("Evaluating bboxes of {}".format(name))
+                    ret_dict = self._evaluate_single(result_files[name])
+                metrics.update(ret_dict)
+            elif isinstance(result_files, str):
+                metrics.update(self._evaluate_single(result_files))
+
+            if tmp_dir is not None:
+                tmp_dir.cleanup()
+
+        return metrics
+
+    def evaluate_seg(self, results):
+        num_map_class = 4
+        semantic_map_iou_val = IntersectionOverUnion(num_map_class)
+        semantic_map_iou_val = semantic_map_iou_val.cuda()
+
+        for result in results:
+            pred = result['seg_preds']
+            pred = onehot_encoding(pred)
+            num_cls = pred.shape[1]
+            indices = torch.arange(0, num_cls).reshape(-1, 1, 1).to(pred.device)
+            pred_semantic_indices = torch.sum(pred * indices, axis=1).int()
+            target_semantic_indices = result['semantic_indices'][0].cuda()
+
+            semantic_map_iou_val(pred_semantic_indices,
+                                 target_semantic_indices)
+
+        scores = semantic_map_iou_val.compute()
+        mIoU = sum(scores[1:]) / (len(scores) - 1)
+        seg_dict = dict(
+            Validation_num=len(results),
+            Divider=round(scores[1:].cpu().numpy()[0], 4),
+            Pred_Crossing=round(scores[1:].cpu().numpy()[1], 4),
+            Boundary=round(scores[1:].cpu().numpy()[2], 4),
+            mIoU=round(mIoU.cpu().numpy().item(), 4)
+        )
+        return seg_dict
 
     def _evaluate_single(self,
                          result_path,
