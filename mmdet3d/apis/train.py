@@ -1,5 +1,7 @@
+import time
+import os.path as osp
 import torch
-from mmcv.parallel import MMDistributedDataParallel
+from mmcv.parallel import MMDistributedDataParallel, MMDataParallel
 from mmcv.runner import (
     DistSamplerSeedHook,
     EpochBasedRunner,
@@ -12,7 +14,7 @@ from mmcv.runner import (
 from mmdet3d.runner import CustomEpochBasedRunner
 
 from mmdet3d.utils import get_root_logger
-from mmdet.core import DistEvalHook
+from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import build_dataloader, build_dataset, replace_ImageToTensor
 
 
@@ -34,7 +36,7 @@ def train_model(
             ds,
             cfg.data.samples_per_gpu,
             cfg.data.workers_per_gpu,
-            None,
+            1,
             dist=distributed,
             seed=cfg.seed,
         )
@@ -45,12 +47,15 @@ def train_model(
     find_unused_parameters = cfg.get("find_unused_parameters", False)
     # Sets the `find_unused_parameters` parameter in
     # torch.nn.parallel.DistributedDataParallel
-    model = MMDistributedDataParallel(
-        model.cuda(),
-        device_ids=[torch.cuda.current_device()],
-        broadcast_buffers=False,
-        find_unused_parameters=find_unused_parameters,
-    )
+    if cfg.dist:
+        model = MMDistributedDataParallel(
+            model.cuda(),
+            device_ids=[torch.cuda.current_device()],
+            broadcast_buffers=False,
+            find_unused_parameters=find_unused_parameters,
+        )
+    else:
+        model = MMDataParallel(model.cuda(),device_ids=[torch.cuda.current_device()])
 
     # build runner
     optimizer = build_optimizer(model, cfg.optimizer)
@@ -116,7 +121,8 @@ def train_model(
         )
         eval_cfg = cfg.get("evaluation", {})
         eval_cfg["by_epoch"] = cfg.runner["type"] != "IterBasedRunner"
-        eval_hook = DistEvalHook
+        eval_cfg['jsonfile_prefix'] = osp.join(cfg.run_dir, "val")
+        eval_hook = DistEvalHook if distributed else EvalHook
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
     if cfg.resume_from:

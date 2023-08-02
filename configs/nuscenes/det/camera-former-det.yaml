@@ -1,0 +1,326 @@
+
+point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+voxel_size: [0.2, 0.2, 8]
+
+input_modality:
+  use_lidar: false
+  use_camera: true
+  use_radar: false
+  use_map: false
+  use_external: true
+
+det_grid_conf:
+  xbound: [-51.2, 51.2, 0.68]
+  ybound: [-51.2, 51.2, 0.68]
+  zbound: [-10.0, 10.0, 20.0]
+  dbound: [1.0, 60.0, 1.0]
+
+map_grid_conf:
+  xbound: [-30.0, 30.0, 0.15]
+  ybound: [-15.0, 15.0, 0.15]
+  zbound: [-10.0, 10.0, 20.0]
+  dbound: [1.0, 60.0, 1.0]
+
+grid_conf: ${map_grid_conf}
+bev_h_: 50
+bev_w_: 50
+bev_size: ${[bev_h_, bev_w_]}
+queue_length: 3
+_dim_: 256
+_pos_dim_: ${_dim_ // 2}
+_ffn_dim_: ${_dim_ * 2}
+_num_levels_: 1
+
+TemporalSelfAttention:
+  type: TemporalSelfAttention
+  embed_dims: ${_dim_}
+  num_levels: 1
+
+SpatialCrossAttention:
+  type: SpatialCrossAttention
+  pc_range: ${point_cloud_range}
+  deformable_attention:
+    type: MSDeformableAttention3D
+    embed_dims: ${_dim_}
+    num_points: 8
+    num_levels: ${_num_levels_}
+  embed_dims: ${_dim_}
+
+MultiheadAttention:
+  type: MultiheadAttention
+  embed_dims: ${_dim_}
+  num_heads: 8
+  dropout: 0.1
+
+CustomMSDeformableAttention:
+  type: CustomMSDeformableAttention
+  embed_dims: ${_dim_}
+  num_levels: 1
+
+model:
+  type: BEVFormer
+  use_grid_mask: True
+  video_test_mode: True
+  pretrained:
+    img: torchvision://resnet50
+  img_backbone:
+    type: ResNet
+    depth: 50
+    num_stages: 4
+    out_indices: [3]
+    frozen_stages: 1
+    norm_cfg:
+      type: BN
+      requires_grad: False
+    norm_eval: True
+    style: pytorch
+#    with_cp: True
+#    dcn:
+#      type: DCNv2
+#      deform_groups: 1
+#      fallback_on_stride: False
+#    stage_with_dcn: [False, False, True, True]
+#        init_cfg:
+#          type: Pretrained
+#          checkpoint: https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
+  img_neck:
+    type: FPN
+    in_channels: [2048]
+    out_channels: ${_dim_}
+    start_level: 0
+    add_extra_convs: on_output
+    num_outs: ${_num_levels_}
+    relu_before_extra_convs: True
+  pts_bbox_head:
+    type: BEVFormerHead
+    bev_size: ${bev_size}
+    num_query: 900
+    num_classes: 10
+    in_channels: ${_dim_}
+    sync_cls_avg_factor: True
+    with_box_refine: True
+    as_two_stage: False
+    task:
+      seg: False
+      det: True
+    transformer:
+      type: PerceptionTransformer
+      rotate_prev_bev: True
+      use_shift: True
+      use_can_bus: True
+      embed_dims: ${_dim_}
+      encoder:
+        type: BEVFormerEncoder
+        num_layers: 3
+        pc_range: ${point_cloud_range}
+        num_points_in_pillar: 4
+        return_intermediate: False
+        transformerlayers:
+          type: BEVFormerLayer
+          attn_cfgs: ${[TemporalSelfAttention, SpatialCrossAttention]}
+          feedforward_channels: ${_ffn_dim_}
+          ffn_dropout: 0.1
+          operation_order: ['self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm']
+      decoder:
+        type: DetectionTransformerDecoder
+        num_layers: 6
+        return_intermediate: True
+        transformerlayers:
+          type: DetrTransformerDecoderLayer
+          attn_cfgs: ${[MultiheadAttention, CustomMSDeformableAttention]}
+          feedforward_channels: ${_ffn_dim_}
+          ffn_dropout: 0.1
+          operation_order: [ 'self_attn', 'norm', 'cross_attn', 'norm', 'ffn', 'norm' ]
+    bbox_coder:
+      type: NMSFreeCoder
+      post_center_range: [-61.2, -61.2, -10.0, 61.2, 61.2, 10.0]
+      pc_range: ${point_cloud_range}
+      max_num: 300
+      voxel_size: ${voxel_size}
+      num_classes: 10
+    positional_encoding:
+      type: LearnedPositionalEncoding
+      num_feats: ${_pos_dim_}
+      row_num_embed: ${bev_h_}
+      col_num_embed: ${bev_w_}
+    loss_cls:
+      type: FocalLoss
+      use_sigmoid: True
+      gamma: 2.0
+      alpha: 0.25
+      loss_weight: 2.0
+    loss_bbox:
+      type: L1Loss
+      loss_weight: 0.25
+    loss_iou:
+      type: GIoULoss
+      loss_weight: 0.0
+  train_cfg:
+    pts:
+      grid_size: [512, 512, 1]
+      voxel_size: ${voxel_size}
+      point_cloud_range: ${point_cloud_range}
+      out_size_factor: 4
+      assigner:
+        type: HungarianAssigner3D_PC
+        cls_cost:
+          type: FocalLossCost
+          weight: 2.0
+        reg_cost:
+          type: BBox3DL1Cost
+          weight: 0.25
+        iou_cost:
+          type: IoUCost
+          weight: 0.0
+        pc_range: ${point_cloud_range}
+
+dataset_type: CustomNuScenesDataset
+dataset_root: data/nuscenes/
+
+train_pipeline:
+  -
+    type: LoadMultiViewImageFromFiles_2
+    to_float32: true
+  -
+    type: PhotoMetricDistortionMultiViewImage
+  -
+    type: LoadAnnotations3D_2
+    with_bbox_3d: True
+    with_label_3d: True
+    with_attr_label: False
+  -
+    type: RasterizeMapVectors
+    map_grid_conf: ${map_grid_conf}
+  -
+    type: ObjectRangeFilter
+    point_cloud_range: ${point_cloud_range}
+  -
+    type: ObjectNameFilter
+    classes: ${object_classes}
+  -
+    type: NormalizeMultiviewImage
+    mean: [103.530, 116.280, 123.675]
+    std: [1.0, 1.0, 1.0]
+    to_rgb: False
+  -
+    type: RandomScaleImageMultiViewImage
+    scales: [0.8]
+  -
+    type: PadMultiViewImage
+    size_divisor: 32
+  -
+    type: DefaultFormatBundle3D_2
+    class_names: ${object_classes}
+  -
+    type: CustomCollect3D
+    keys: ['gt_bboxes_3d', 'gt_labels_3d', 'img']
+
+test_pipeline:
+  -
+    type: LoadMultiViewImageFromFiles_2
+    to_float32: true
+  -
+    type: RasterizeMapVectors
+    map_grid_conf: ${map_grid_conf}
+  -
+    type: NormalizeMultiviewImage
+    mean: [103.530, 116.280, 123.675]
+    std: [1.0, 1.0, 1.0]
+    to_rgb: False
+  -
+    type: MultiScaleFlipAug3D
+    img_scale: [1600, 900]
+    pts_scale_ratio: 1
+    flip: False
+    transforms:
+      -
+        type: RandomScaleImageMultiViewImage
+        scales: [ 0.8 ]
+      -
+        type: PadMultiViewImage
+        size_divisor: 32
+      -
+        type: DefaultFormatBundle3D_2
+        class_names: ${object_classes}
+        with_label: False
+      -
+        type: CustomCollect3D
+        keys: ['img', 'semantic_indices']
+
+data:
+  samples_per_gpu: 1
+  workers_per_gpu: 4
+  train:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "nuscenes_infos_train.pkl"}
+    pipeline: ${train_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: False
+    use_valid_flag: True
+    grid_conf: ${grid_conf}
+    bev_size: ${bev_size}
+    queue_length: ${queue_length}
+    box_type_3d: LiDAR
+  val:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    grid_conf: ${grid_conf}
+    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    pipeline: ${test_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    bev_size: ${bev_size}
+    samples_per_gpu: 1
+  test:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    grid_conf: ${grid_conf}
+    ann_file: ${dataset_root + "nuscenes_infos_val.pkl"}
+    pipeline: ${test_pipeline}
+    object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    bev_size: ${bev_size}
+    test_mode: true
+    box_type_3d: LiDAR
+
+optimizer:
+  type: AdamW
+  lr: 0.0002
+  weight_decay: 0.01
+  paramwise_cfg:
+    custom_keys:
+      absolute_pos_embed:
+        decay_mult: 0
+      relative_position_bias_table:
+        decay_mult: 0
+
+optimizer_config:
+  grad_clip:
+    max_norm: 35
+    norm_type: 2
+
+lr_config:
+  policy: CosineAnnealing
+  warmup: linear
+  warmup_iters: 500
+  warmup_ratio: ${1.0 / 3}
+  min_lr_ratio: 0.001
+
+evaluation:
+  interval: 1
+  pipeline: ${test_pipeline}
+
+total_epochs: 24
+
+runner:
+  type: EpochBasedRunner
+  max_epochs: ${total_epochs}
+
+
+#momentum_config:
+#  policy: cyclic

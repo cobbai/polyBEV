@@ -40,7 +40,7 @@ nus_attributes = (
 
 
 def create_nuscenes_infos(
-    root_path, info_prefix, version="v1.0-trainval", max_sweeps=10
+    root_path, can_bus_root_path, info_prefix, version="v1.0-trainval", max_sweeps=10
 ):
     """Create info file of nuscene dataset.
 
@@ -55,8 +55,10 @@ def create_nuscenes_infos(
             Default: 10
     """
     from nuscenes.nuscenes import NuScenes
-
+    from nuscenes.can_bus.can_bus_api import NuScenesCanBus
+    print(version, root_path)
     nusc = NuScenes(version=version, dataroot=root_path, verbose=True)
+    nusc_can_bus = NuScenesCanBus(dataroot=can_bus_root_path)
     from nuscenes.utils import splits
 
     available_vers = ["v1.0-trainval", "v1.0-test", "v1.0-mini"]
@@ -96,7 +98,7 @@ def create_nuscenes_infos(
             "train scene: {}, val scene: {}".format(len(train_scenes), len(val_scenes))
         )
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-        nusc, train_scenes, val_scenes, test, max_sweeps=max_sweeps
+        nusc, nusc_can_bus, train_scenes, val_scenes, test, max_sweeps=max_sweeps
     )
 
     metadata = dict(version=version)
@@ -160,7 +162,32 @@ def get_available_scenes(nusc):
     return available_scenes
 
 
-def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False, max_sweeps=10):
+def _get_can_bus_info(nusc, nusc_can_bus, sample):
+    scene_name = nusc.get('scene', sample['scene_token'])['name']
+    sample_timestamp = sample['timestamp']
+    try:
+        pose_list = nusc_can_bus.get_messages(scene_name, 'pose')
+    except:
+        return np.zeros(18)  # server scenes do not have can bus information.
+    can_bus = []
+    # during each scene, the first timestamp of can_bus may be large than the first sample's timestamp
+    last_pose = pose_list[0]
+    for i, pose in enumerate(pose_list):
+        if pose['utime'] > sample_timestamp:
+            break
+        last_pose = pose
+    _ = last_pose.pop('utime')  # useless
+    pos = last_pose.pop('pos')
+    rotation = last_pose.pop('orientation')
+    can_bus.extend(pos)
+    can_bus.extend(rotation)
+    for key in last_pose.keys():
+        can_bus.extend(pose[key])  # 16 elements
+    can_bus.extend([0., 0.])
+    return np.array(can_bus)
+
+
+def _fill_trainval_infos(nusc, nusc_can_bus, train_scenes, val_scenes, test=False, max_sweeps=10):
     """Generate the train/val infos from the raw data.
 
     Args:
@@ -177,7 +204,7 @@ def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False, max_sweeps=
     """
     train_nusc_infos = []
     val_nusc_infos = []
-
+    frame_idx = 0
     for sample in mmcv.track_iter_progress(nusc.sample):
         lidar_token = sample["data"]["LIDAR_TOP"]
         sd_rec = nusc.get("sample_data", sample["data"]["LIDAR_TOP"])
@@ -189,12 +216,18 @@ def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False, max_sweeps=
         lidar_path, boxes, _ = nusc.get_sample_data(lidar_token)
 
         mmcv.check_file_exist(lidar_path)
+        can_bus = _get_can_bus_info(nusc, nusc_can_bus, sample)
 
         info = {
             "lidar_path": lidar_path,
             "token": sample["token"],
+            "prev": sample["prev"],
+            "next": sample["next"],
+            "can_bus": can_bus,
+            "frame_idx": frame_idx,
             "sweeps": [],
             "cams": dict(),
+            "scene_token": sample["scene_token"],
             "lidar2ego_translation": cs_record["translation"],
             "lidar2ego_rotation": cs_record["rotation"],
             "ego2global_translation": pose_record["translation"],
@@ -202,6 +235,11 @@ def _fill_trainval_infos(nusc, train_scenes, val_scenes, test=False, max_sweeps=
             "timestamp": sample["timestamp"],
             "location": location,
         }
+
+        if sample['next'] == '':
+            frame_idx = 0
+        else:
+            frame_idx += 1
 
         l2e_r = info["lidar2ego_rotation"]
         l2e_t = info["lidar2ego_translation"]

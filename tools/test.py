@@ -1,6 +1,7 @@
 import argparse
 import copy
 import os
+import time
 import warnings
 
 import mmcv
@@ -23,6 +24,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="MMDet test (and eval) a model")
     parser.add_argument("config", help="test config file path")
     parser.add_argument("checkpoint", help="checkpoint file")
+    parser.add_argument("--dist", action="store_true", default=False, help="train distributed")
     parser.add_argument("--out", help="output result file in pickle format")
     parser.add_argument(
         "--fuse-conv-bn",
@@ -96,6 +98,7 @@ def parse_args():
     )
     parser.add_argument("--local_rank", type=int, default=0)
     args = parser.parse_args()
+
     if "LOCAL_RANK" not in os.environ:
         os.environ["LOCAL_RANK"] = str(args.local_rank)
 
@@ -112,10 +115,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-    dist.init()
-
-    torch.backends.cudnn.benchmark = True
-    torch.cuda.set_device(dist.local_rank())
 
     assert args.out or args.eval or args.format_only or args.show or args.show_dir, (
         "Please specify at least one operation (save/eval/format/show the "
@@ -131,7 +130,14 @@ def main():
 
     configs.load(args.config, recursive=True)
     cfg = Config(recursive_eval(configs), filename=args.config)
-    print(cfg)
+
+    cfg.dist = args.dist
+    if cfg.dist: dist.init()
+
+    torch.backends.cudnn.benchmark = True
+    torch.cuda.set_device(dist.local_rank())
+
+    # print(cfg)
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
@@ -159,7 +165,7 @@ def main():
                 ds_cfg.pipeline = replace_ImageToTensor(ds_cfg.pipeline)
 
     # init distributed env first, since logger depends on the dist info.
-    distributed = True
+    distributed = True if cfg.dist else False
 
     # set random seeds
     if args.seed is not None:
@@ -192,7 +198,7 @@ def main():
         model.CLASSES = dataset.CLASSES
 
     if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
+        model = MMDataParallel(model.cuda(), device_ids=[0])
         outputs = single_gpu_test(model, data_loader)
     else:
         model = MMDistributedDataParallel(
@@ -208,6 +214,8 @@ def main():
             print(f"\nwriting results to {args.out}")
             mmcv.dump(outputs, args.out)
         kwargs = {} if args.eval_options is None else args.eval_options
+        if not os.path.exists("./runs"): os.mkdir("./runs")
+        kwargs['jsonfile_prefix'] = os.path.join('runs', time.ctime().replace(' ', '_').replace(':', '_'))
         if args.format_only:
             dataset.format_results(outputs, **kwargs)
         if args.eval:
