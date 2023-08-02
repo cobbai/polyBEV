@@ -198,7 +198,7 @@ def main():
         model.CLASSES = dataset.CLASSES
 
     if not distributed:
-        model = MMDataParallel(model, device_ids=[0])
+        model = MMDataParallel(model.cuda(), device_ids=[0])
         outputs = single_gpu_test(model, data_loader)
     else:
         model = MMDistributedDataParallel(

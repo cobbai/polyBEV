@@ -11,12 +11,43 @@ from mmcv.runner import load_checkpoint, wrap_fp16_model
 from torchpack import distributed as dist
 from torchpack.utils.config import configs
 # from torchpack.utils.tqdm import tqdm
-import tqdm
+import cv2
 
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
+
+
+def onehot_encoding(logits, dim=1):
+    max_idx = torch.argmax(logits, dim, keepdim=True)
+    one_hot = logits.new_full(logits.shape, 0)
+    one_hot.scatter_(dim, max_idx, 1)
+    return one_hot
+
+
+def show_seg(labels, car_img):
+
+    PALETTE = [[255, 255, 255], [220, 20, 60], [0, 0, 128], [0, 100, 0],
+               [128, 0, 0], [64, 0, 128], [64, 0, 192], [192, 128, 64],
+               [192, 192, 128], [64, 64, 128], [128, 0, 192], [192, 0, 64]]
+    mask_colors = np.array(PALETTE)
+    img = np.zeros((200, 400, 3))
+
+    for index, mask_ in enumerate(labels):
+        color_mask = mask_colors[index]
+        mask_ = mask_.astype(bool)
+        img[mask_] = color_mask
+
+    # 这里需要水平翻转，因为这样才可以保证与在图像坐标系下，与习惯相同
+
+    img = np.flip(img, axis=0)
+    # 可视化小车
+    car_img = np.where(car_img == [0, 0, 0], [255, 255, 255], car_img)[16: 84, 5:, :]
+    car_img = cv2.resize(car_img.astype(np.uint8), (30, 16))
+    img[img.shape[0] // 2 - 8: img.shape[0] // 2 + 8, img.shape[1] // 2 - 15: img.shape[1] // 2 + 15, :] = car_img
+
+    return img
 
 
 def recursive_eval(obj, globals=None):
@@ -39,7 +70,7 @@ def recursive_eval(obj, globals=None):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
-    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred"])
+    parser.add_argument("--mode", type=str, default="pred", choices=["gt", "pred"])
     parser.add_argument("--checkpoint", type=str, default=None)
     parser.add_argument("--dist", action="store_true", default=False, help="train distributed")
     parser.add_argument("--split", type=str, default="val", choices=["train", "val"])
@@ -70,13 +101,18 @@ def main() -> None:
         shuffle=False,
     )
 
+    car_img_cv = cv2.imread('assets/car.png')
+    
     # build the model and load checkpoint
     if args.mode == "pred":
         model = build_model(cfg.model)
+
         fp16_cfg = cfg.get("fp16", None)
         if fp16_cfg is not None:
             wrap_fp16_model(model)
+
         load_checkpoint(model, args.checkpoint, map_location="cpu")
+
         if cfg.dist:
             model = MMDistributedDataParallel(
                 model.cuda(),
@@ -84,17 +120,26 @@ def main() -> None:
                 broadcast_buffers=False,
             )
         else:
-            model = MMDataParallel(model, device_ids=[0])
+            model = MMDataParallel(model.cuda(), device_ids=[0])
         model.eval()
 
     for data in dataflow:
-        metas = data["metas"].data[0][0]
-        name = "{}-{}".format(metas["timestamp"], metas["token"])
+        if "metas" in data:
+            metas = data["metas"].data[0][0]
+            name = "{}-{}".format(metas["timestamp"], metas["token"])
+            lidar2image = metas["lidar2image"]
+        else:
+            metas = data["img_metas"][0].data[0][0]
+            name = metas["sample_idx"]
+            lidar2image = metas["lidar2img"]
 
         if args.mode == "pred":
+            # 比 torch.no_grad() 有更好的性能
             with torch.inference_mode():
-                outputs = model(**data)
+                outputs = model(return_loss=False, rescale=True,**data)
 
+        bboxes = None
+        labels = None
         if args.mode == "gt" and "gt_bboxes_3d" in data:
             bboxes = data["gt_bboxes_3d"].data[0][0].tensor.numpy()
             labels = data["gt_labels_3d"].data[0][0].numpy()
@@ -125,18 +170,9 @@ def main() -> None:
 
             bboxes[..., 2] -= bboxes[..., 5] / 2
             bboxes = LiDARInstance3DBoxes(bboxes, box_dim=9)
-        else:
-            bboxes = None
-            labels = None
-
-        if args.mode == "gt" and "gt_masks_bev" in data:
-            masks = data["gt_masks_bev"].data[0].numpy()
-            masks = masks.astype(np.bool)
-        elif args.mode == "pred" and "masks_bev" in outputs[0]:
-            masks = outputs[0]["masks_bev"].numpy()
-            masks = masks >= args.map_score
-        else:
-            masks = None
+        # bevformer det output
+        elif args.mode == "pred" and "pts_bbox" in outputs[0] and outputs[0]["pts_bbox"] is not None:
+            pass
 
         if "img" in data:
             for k, image_path in enumerate(metas["filename"]):
@@ -146,7 +182,7 @@ def main() -> None:
                     image,
                     bboxes=bboxes,
                     labels=labels,
-                    transform=metas["lidar2image"][k],
+                    transform=lidar2image[k],
                     classes=cfg.object_classes,
                 )
 
@@ -162,12 +198,42 @@ def main() -> None:
                 classes=cfg.object_classes,
             )
 
-        if masks is not None:
+        # 语义分割
+        if "gt_masks_bev" in data:
+            masks = data["gt_masks_bev"].data[0].numpy()
+            masks = masks.astype(np.bool)
+            visualize_map(
+                os.path.join(args.out_dir, "map", f"{name}_gt.png"),
+                masks,
+                classes=cfg.map_classes,
+            )
+
+        if "masks_bev" in outputs[0]:
+            masks = outputs[0]["masks_bev"].numpy()
+            masks = masks >= args.map_score
             visualize_map(
                 os.path.join(args.out_dir, "map", f"{name}.png"),
                 masks,
                 classes=cfg.map_classes,
             )
+
+        # bevformer seg output
+        if "semantic_indices" in outputs[0] and outputs[0]["seg_preds"] is not None:
+            semantic = outputs[0]['seg_preds']
+            semantic = onehot_encoding(semantic).cpu().numpy()
+            fpath = os.path.join(args.out_dir, "semantic", name + ".png")
+            mmcv.mkdir_or_exist(os.path.dirname(fpath))
+            mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
+
+            drawgt = True
+            if drawgt:
+                target_semantic_indices = outputs[0]['semantic_indices'][0].unsqueeze(0)
+                one_hot = target_semantic_indices.new_full(semantic.shape, 0)
+                one_hot.scatter_(1, target_semantic_indices, 1)
+                semantic = one_hot.cpu().numpy().astype(np.float)
+                fpath = os.path.join(args.out_dir, "semantic", name + "_gt.png")
+                mmcv.mkdir_or_exist(os.path.dirname(fpath))
+                mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
 
 if __name__ == "__main__":
