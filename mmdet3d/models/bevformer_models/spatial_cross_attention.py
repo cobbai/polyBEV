@@ -22,6 +22,108 @@ ext_module = ext_loader.load_ext(
 
 
 @ATTENTION.register_module()
+class CustomCrossAttention(BaseModule):
+    """An attention module used in BEVFormer.
+    Args:
+        embed_dims (int): The embedding dimension of Attention.
+            Default: 256.
+        num_cams (int): The number of cameras
+        dropout (float): A Dropout layer on `inp_residual`.
+            Default: 0..
+        init_cfg (obj:`mmcv.ConfigDict`): The Config for initialization.
+            Default: None.
+        deformable_attention: (dict): The config for the deformable attention used in SCA.
+    """
+
+    def __init__(self,
+                 embed_dims=256,
+                 num_cams=6,
+                 pc_range=None,
+                 dropout=0.1,
+                 init_cfg=None,
+                 batch_first=False,
+                 deformable_attention=dict(
+                     type='MSDeformableAttention3D',
+                     embed_dims=256,
+                     num_levels=4),
+                 **kwargs
+                 ):
+        super(CustomCrossAttention, self).__init__(init_cfg)
+
+        self.init_cfg = init_cfg
+        self.dropout = nn.Dropout(dropout)
+        self.pc_range = pc_range
+        self.fp16_enabled = False
+        self.deformable_attention = build_attention(deformable_attention)
+        self.embed_dims = embed_dims
+        self.num_cams = num_cams
+        self.output_proj = nn.Linear(embed_dims, embed_dims)
+        self.batch_first = batch_first
+        self.init_weight()
+
+    def init_weight(self):
+        """Default initialization for Parameters of Module."""
+        xavier_init(self.output_proj, distribution='uniform', bias=0.)
+    
+    @force_fp32(apply_to=('query', 'key', 'value', 'query_pos', 'reference_points_cam'))
+    def forward(self,
+                query,
+                key,
+                value,
+                residual=None,
+                query_pos=None,
+                key_padding_mask=None,
+                reference_points=None,
+                spatial_shapes=None,
+                reference_points_cam=None,
+                bev_mask=None,
+                level_start_index=None,
+                flag='encoder',
+                **kwargs):
+
+        if key is None:
+            key = query
+        if value is None:
+            value = key
+
+        if residual is None:
+            inp_residual = query
+            slots = torch.zeros_like(query)
+        if query_pos is not None:
+            query = query + query_pos
+
+        bs, num_query, _ = query.size()
+
+        num_cams, l, bs, embed_dims = key.shape
+
+        key = key.permute(2, 0, 1, 3).reshape(
+            bs * num_cams, l, self.embed_dims)
+        value = value.permute(2, 0, 1, 3).reshape(
+            bs * num_cams, l, self.embed_dims)
+
+        # TODO: [1,40000, 256] --> [3, 40000, 256] V有3张特征图，因此对Q构造3层BEV特征分别查
+        query = torch.stack([query[0], query[0], query[0]], dim=0)
+
+        queries = self.deformable_attention(query, key=key, value=value,
+                                            reference_points=reference_points, spatial_shapes=spatial_shapes,
+                                            level_start_index=level_start_index) # .view(bs, self.num_cams, max_len, self.embed_dims)
+        # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
+        queries = queries.permute(1, 2, 0)
+
+        # # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
+        queries = queries.view(num_query, embed_dims, bs, num_cams)
+        queries = queries.mean(-1)
+
+        # (num_query, embed_dims, bs)-> (bs, num_query, embed_dims)
+        queries = queries.permute(2, 0, 1)
+
+        queries = self.output_proj(queries)
+
+        return self.dropout(queries) + inp_residual
+
+
+
+@ATTENTION.register_module()
 class SpatialCrossAttention(BaseModule):
     """An attention module used in BEVFormer.
     Args:
@@ -320,22 +422,22 @@ class MSDeformableAttention3D(BaseModule):
             query = query.permute(1, 0, 2)
             value = value.permute(1, 0, 2)
 
-        bs, num_query, _ = query.shape
-        bs, num_value, _ = value.shape
+        bs_q, num_query, _ = query.shape
+        bs_v, num_value, _ = value.shape
         assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
             value = value.masked_fill(key_padding_mask[..., None], 0.0)
-        value = value.view(bs, num_value, self.num_heads, -1)
+        value = value.view(bs_v, num_value, self.num_heads, -1)
         sampling_offsets = self.sampling_offsets(query).view(
-            bs, num_query, self.num_heads, self.num_levels, self.num_points, 2)
+            bs_q, num_query, self.num_heads, self.num_levels, self.num_points, 2)
         attention_weights = self.attention_weights(query).view(
-            bs, num_query, self.num_heads, self.num_levels * self.num_points)
+            bs_q, num_query, self.num_heads, self.num_levels * self.num_points)
 
         attention_weights = attention_weights.softmax(-1)
 
-        attention_weights = attention_weights.view(bs, num_query,
+        attention_weights = attention_weights.view(bs_q, num_query,
                                                    self.num_heads,
                                                    self.num_levels,
                                                    self.num_points)

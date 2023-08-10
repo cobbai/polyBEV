@@ -29,7 +29,7 @@ class Up(nn.Module):
 
 @SEG_ENCODER.register_module()
 class SegEncode(nn.Module):
-    def __init__(self, inC, outC):
+    def __init__(self, inC, outC, scale_factor=(4)):
         super(SegEncode, self).__init__()
         trunk = resnet18(pretrained=False, zero_init_residual=True)
         self.conv1 = nn.Conv2d(inC, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -39,7 +39,8 @@ class SegEncode(nn.Module):
         self.layer2 = trunk.layer2
         self.layer3 = trunk.layer3
 
-        self.up1 = Up(64 + 256, 256, scale_factor=4)
+        # self.up1 = Up(64 + 256, 256, scale_factor=4)
+        self.up1 = Up(64 + 256, 256, scale_factor=scale_factor)
         self.up2 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear',
                         align_corners=True),
@@ -50,7 +51,7 @@ class SegEncode(nn.Module):
         )
 
     def forward(self, x):  # torch.Size([2, 256, 200, 400])
-        x = self.conv1(x)  # torch.Size([2, 64, 200, 400])
+        x = self.conv1(x)  # torch.Size([2, 64, 200, 400]) [1, 64, 325, 200]
         x = self.bn1(x)
         x = self.relu(x)
 

@@ -7,3 +7,4 @@ from .pipelines import *
 from .utils import *
 from .bevformer_nuscene_dataset import *
 from .rasterize import *
+from .custom_locaation_dataset import *

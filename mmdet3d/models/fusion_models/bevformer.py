@@ -233,7 +233,7 @@ class BEVFormer(MVXTwoStageDetector):
         
         len_queue = img.size(1) # 构建的时间队列长度
         prev_img = img[:, :-1, ...] # 获取前两针的图像
-        img = img[:, -1, ...] #当前时刻图像
+        img = img[:, -1, ...] # 当前时刻图像
 
         prev_img_metas = copy.deepcopy(img_metas) # 这里没写好吧，但是影响不大
         prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) # 获取前3帧的bev特征

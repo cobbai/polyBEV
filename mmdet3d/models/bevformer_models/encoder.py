@@ -40,6 +40,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
         self.pc_range = pc_range
         self.fp16_enabled = False
 
+        self.dataset_type = dataset_type
+
     @staticmethod
     def get_reference_points(H, W, Z=8, num_points_in_pillar=4, dim='3d', bs=1, device='cuda', dtype=torch.float):
         """Get the reference points used in SCA and TSA.
@@ -177,14 +179,18 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         output = bev_query
         intermediate = []
-        # 现在还没表示真实世界空间坐标
-        ref_3d = self.get_reference_points(
-            bev_h, bev_w, self.pc_range[5]-self.pc_range[2], self.num_points_in_pillar, dim='3d', bs=bev_query.size(1),  device=bev_query.device, dtype=bev_query.dtype) #3D点后续用于SCA
+        # 采样bev特征图上的位置坐标，现在还没表示真实世界空间坐标
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.size(1), device=bev_query.device, dtype=bev_query.dtype) # TSA需要的是2d的采样点，在BEV上
 
-        reference_points_cam, bev_mask = self.point_sampling(
-            ref_3d, self.pc_range, kwargs['img_metas'])
+        if self.dataset_type == "custom":
+            ref_3d = ref_2d
+            reference_points_cam, bev_mask = None, None
+        else:
+            ref_3d = self.get_reference_points(
+                bev_h, bev_w, self.pc_range[5]-self.pc_range[2], self.num_points_in_pillar, dim='3d', bs=bev_query.size(1),  device=bev_query.device, dtype=bev_query.dtype) #3D点后续用于SCA
+            reference_points_cam, bev_mask = self.point_sampling(
+                ref_3d, self.pc_range, kwargs['img_metas'])
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
         shift_ref_2d = ref_2d  # .clone()
