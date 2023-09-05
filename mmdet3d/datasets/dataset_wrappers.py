@@ -48,8 +48,8 @@ class CBGSDataset:
             k: len(v) / duplicated_samples for k, v in class_sample_idxs.items()
         }
 
+        # 按样本权重占比随机取类别
         sample_indices = []
-
         frac = 1.0 / len(self.CLASSES)
         ratios = [frac / v for v in class_distribution.values()]
         for cls_inds, ratio in zip(list(class_sample_idxs.values()), ratios):

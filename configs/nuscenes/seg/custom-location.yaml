@@ -25,7 +25,7 @@ grid_conf: ${map_grid_conf}
 bev_h_: 50
 bev_w_: 50
 bev_size: ${[bev_h_, bev_w_]}
-queue_length: 4
+queue_length: 3
 _dim_: 256
 _pos_dim_: ${_dim_ // 2}
 _ffn_dim_: ${_dim_ * 2}
@@ -97,9 +97,9 @@ model:
     transformer:
       type: PerceptionTransformer
       num_cams: 3
-      rotate_prev_bev: True
-      use_shift: True
-      use_can_bus: True
+      rotate_prev_bev: False
+      use_shift: False
+      use_can_bus: False
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
@@ -158,17 +158,17 @@ model:
         pc_range: ${point_cloud_range}
 
 dataset_type: CustomLocationDataset
-dataset_root: data/customLocation/
+dataset_root: data/out_123/
 
 train_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
-  -
-    type: NormalizeMultiviewImage
-    mean: [103.530, 116.280, 123.675]
-    std: [1.0, 1.0, 1.0]
-    to_rgb: False
+  # -
+  #   type: NormalizeMultiviewImage
+  #   mean: [103.530, 116.280, 123.675]
+  #   std: [1.0, 1.0, 1.0]
+  #   to_rgb: False
   -
     type: PadMultiViewImage
     size: [480, 416]  # 32 的倍数
@@ -183,11 +183,11 @@ test_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
-  -
-    type: NormalizeMultiviewImage
-    mean: [103.530, 116.280, 123.675]
-    std: [1.0, 1.0, 1.0]
-    to_rgb: False
+  # -
+  #   type: NormalizeMultiviewImage
+  #   mean: [103.530, 116.280, 123.675]
+  #   std: [1.0, 1.0, 1.0]
+  #   to_rgb: False
   -
     type: MultiScaleFlipAug3D
     img_scale: [480, 416]
@@ -206,11 +206,11 @@ test_pipeline:
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 4
+  workers_per_gpu: 0
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "train_metas.txt"}
+    ann_file: ${dataset_root + "metas_intersection.txt"}
     pipeline: ${train_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -225,7 +225,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "test_metas.txt"}
+    ann_file: ${dataset_root + "metas_intersection.txt"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -239,7 +239,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "test_metas.txt"}
+    ann_file: ${dataset_root + "metas_intersection.txt"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}

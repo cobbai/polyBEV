@@ -22,8 +22,8 @@ map_grid_conf:
   dbound: [1.0, 60.0, 1.0]
 
 grid_conf: ${map_grid_conf}
-bev_h_: 150
-bev_w_: 150
+bev_h_: 50
+bev_w_: 50
 bev_size: ${[bev_h_, bev_w_]}
 queue_length: 4
 _dim_: 256

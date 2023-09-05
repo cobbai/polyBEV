@@ -131,7 +131,7 @@ def main() -> None:
         else:
             metas = data["img_metas"][0].data[0][0]
             name = metas["sample_idx"]
-            lidar2image = metas["lidar2img"]
+            lidar2image = metas["lidar2img"] if "lidar2img" in metas else None
 
         if args.mode == "pred":
             # 比 torch.no_grad() 有更好的性能
@@ -174,7 +174,7 @@ def main() -> None:
         elif args.mode == "pred" and "pts_bbox" in outputs[0] and outputs[0]["pts_bbox"] is not None:
             pass
 
-        if "img" in data:
+        if "img" in data and lidar2image is not None:
             for k, image_path in enumerate(metas["filename"]):
                 image = mmcv.imread(image_path)
                 visualize_camera(

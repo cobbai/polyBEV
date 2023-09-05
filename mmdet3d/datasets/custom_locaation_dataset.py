@@ -80,27 +80,27 @@ class CustomLocationDataset(Dataset):
             line = r.readline()
             while line:
                 temp = {}
-                seg = [float(x.strip("").strip("\n")) for x in line.split(",")]
-                time = int(seg[0])  # time name
+                seg = [float(x.strip("").strip(" ").strip("\n")) for x in line.split(",")]
+                time = seg[0]  # time name
                 temp["scene_token"] = time
 
                 # can_bus
-                can_bus = np.array(seg[1:])
-                rotation = Quaternion(can_bus[3:7])
+                can_bus = seg[1:]
+                rotation = Quaternion([can_bus[6]] + can_bus[3:6])
                 can_bus[3:7] = rotation
                 patch_angle = quaternion_yaw(rotation) / np.pi * 180
                 if patch_angle < 0:
                     patch_angle += 360
                 can_bus[-2] = patch_angle / 180 * np.pi
                 can_bus[-1] = patch_angle
-                temp["can_bus"] = can_bus
+                temp["can_bus"] = np.array(can_bus)
 
                 temp["img_filename"] = [
-                    osp.join(dataset_root, "images", "30_30", str(time) + ".jpg"),
-                    osp.join(dataset_root, "images", "40_40", str(time) + ".jpg"),
-                    osp.join(dataset_root, "images", "40_45", str(time) + ".jpg"),
+                    osp.join(dataset_root, "images", "30_30", str(time) + "00000.png"),
+                    osp.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
+                    osp.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
                     ]
-                temp["semantic_indices"] = osp.join(dataset_root, "label", "40_65", str(time) + ".jpg")
+                temp["semantic_indices_file"] = osp.join(dataset_root, "label", "40_65", str(time) + "00000.png")
                 result.append(temp)
                 line = r.readline()
 
@@ -159,7 +159,7 @@ class CustomLocationDataset(Dataset):
                 return None
             self.pre_pipeline(input_dict)
             example = self.pipeline(input_dict)
-            queue.append(copy.deepcopy(example)) # 深拷贝防止第一帧图片改到自己
+            queue.append(example)
         return self.union2one(queue)
     
     def prepare_test_data(self, index):
@@ -214,9 +214,8 @@ class CustomLocationDataset(Dataset):
             imgs_list.append(each["img"].data)
 
             # first token
-            if metas_map[i]['scene_token'] != prev_token:
+            if metas_map[i]['prev'] == None or metas_map[i]['prev'] != prev_token:
                 metas_map[i]['prev_bev_exists'] = False
-                prev_token = metas_map[i]['scene_token']
                 prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] = 0
@@ -226,9 +225,11 @@ class CustomLocationDataset(Dataset):
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] -= prev_pos
+                metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
                 metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
+            prev_token = metas_map[i]['scene_token']
 
         result['img_metas'] = DC(metas_map, cpu_only=True)
         result["img"] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)
