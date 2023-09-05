@@ -82,7 +82,7 @@ class SegEncode_v1(nn.Module):
 import math
 import torch.nn as nn
 from mmcv.cnn import ConvModule
-from mmcv.runner import BaseModule, auto_fp16, force_fp32
+from mmcv.runner import BaseModule, auto_fp16
 
 
 @SEG_ENCODER.register_module()

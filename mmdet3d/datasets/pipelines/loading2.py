@@ -2,7 +2,7 @@
 from typing import Any
 import mmcv
 import numpy as np
-
+# from PIL import Image
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
@@ -16,14 +16,23 @@ class LoadMultiImageCustom(object):
 
     def __call__(self, results) -> Any:
         filename = results['img_filename']
+        # import cv2
+        # cv2.setNumThreads(0)
         if self.to_float32:
-            img = [mmcv.imread(name, self.color_type).astype(np.float32) for name in filename]
+            img = [mmcv.imread(name).astype(np.float32) / 2.0 for name in filename]
+            # img = [np.array(Image.open(name)).astype(np.float32) / 2.0 for name in filename]
+            # img = [np.concatenate([
+            #     np.expand_dims(i, axis=2), 
+            #     np.expand_dims(i, axis=2), 
+            #     np.expand_dims(i, axis=2)
+            #     ], axis=2) for i in img]
         else:
-            img = [mmcv.imread(name, self.color_type) for name in filename]
+            img = [np.array(Image.open(name)) for name in filename]
         results['filename'] = filename
         results['img'] = img
-        results["semantic_indices"] = mmcv.imread(results["semantic_indices"], flag='grayscale')
-        
+        results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
+        # results["semantic_indices"] = np.array(Image.open(results["semantic_indices_file"]))
+
         return results
 
 
