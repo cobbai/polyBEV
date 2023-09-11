@@ -2,7 +2,7 @@
 from typing import Any
 import mmcv
 import numpy as np
-# from PIL import Image
+from PIL import Image
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
@@ -10,28 +10,46 @@ from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
 
 @PIPELINES.register_module()
 class LoadMultiImageCustom(object):
-    def __init__(self, to_float32=False, color_type='unchanged'):
+    def __init__(self, to_float32=False, color_type='unchanged', image_size=None, label_size=None, classes=None):
         self.to_float32 = to_float32
         self.color_type = color_type
+        self.image_size = image_size
+        self.label_size = label_size
+        self.classes = classes
 
     def __call__(self, results) -> Any:
         filename = results['img_filename']
         # import cv2
         # cv2.setNumThreads(0)
         if self.to_float32:
-            img = [mmcv.imread(name).astype(np.float32) / 2.0 for name in filename]
-            # img = [np.array(Image.open(name)).astype(np.float32) / 2.0 for name in filename]
+            # img = [mmcv.imread(name).astype(np.float32) / 2.0 for name in filename]
+            img = [Image.open(name).convert("RGB").resize(self.image_size) for name in filename]
             # img = [np.concatenate([
             #     np.expand_dims(i, axis=2), 
             #     np.expand_dims(i, axis=2), 
             #     np.expand_dims(i, axis=2)
             #     ], axis=2) for i in img]
         else:
-            img = [np.array(Image.open(name)) for name in filename]
+            img = [Image.open(name) for name in filename]
         results['filename'] = filename
         results['img'] = img
-        results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
-        # results["semantic_indices"] = np.array(Image.open(results["semantic_indices_file"]))
+        results["img_shape"] = img[0].size
+        results["ori_shape"] = img[0].size
+        # Set initial values for default meta_keys
+        results["pad_shape"] = img[0].size
+        results["scale_factor"] = 1.0
+
+        # results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
+        if self.label_size is not None:
+            semantic_indices = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            labels = np.zeros((len(self.classes), *self.label_size), dtype=np.long)
+            for k, name in enumerate(self.classes):
+                masks = semantic_indices == k + 1
+                labels[k, masks] = 1
+                # print(labels[1, masks].shape)
+            results["gt_masks_bev"] = labels
+        else:
+            results["semantic_indices"] = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
 
         return results
 

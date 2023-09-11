@@ -76,7 +76,7 @@ def main() -> None:
     parser.add_argument("--split", type=str, default="val", choices=["train", "val"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
     parser.add_argument("--bbox-score", type=float, default=None)
-    parser.add_argument("--map-score", type=float, default=0.5)
+    parser.add_argument("--map-score", type=float, default=0.25)
     parser.add_argument("--out-dir", type=str, default="viz")
     args, opts = parser.parse_known_args()
 
@@ -120,14 +120,14 @@ def main() -> None:
                 broadcast_buffers=False,
             )
         else:
-            model = MMDataParallel(model.cuda(), device_ids=[0])
+            model = MMDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()])
         model.eval()
 
     for data in dataflow:
         if "metas" in data:
             metas = data["metas"].data[0][0]
             name = "{}-{}".format(metas["timestamp"], metas["token"])
-            lidar2image = metas["lidar2image"]
+            lidar2image = metas["lidar2image"] if "lidar2image" in metas else None
         else:
             metas = data["img_metas"][0].data[0][0]
             name = metas["sample_idx"]

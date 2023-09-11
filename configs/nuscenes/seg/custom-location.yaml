@@ -164,16 +164,19 @@ train_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
+    image_size: [480, 416]
+  -
+    type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
   # -
-  #   type: NormalizeMultiviewImage
-  #   mean: [103.530, 116.280, 123.675]
-  #   std: [1.0, 1.0, 1.0]
-  #   to_rgb: False
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
   -
-    type: PadMultiViewImage
-    size: [480, 416]  # 32 的倍数
-  -
-    type: DefaultFormatBundle_2
+    type: DefaultFormatBundle3D
+    classes: None
+    with_gt: false
+    with_label: false
   -
     type: CustomCollect3D
     keys: ['img', 'semantic_indices']
@@ -183,25 +186,29 @@ test_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
-  # -
-  #   type: NormalizeMultiviewImage
-  #   mean: [103.530, 116.280, 123.675]
-  #   std: [1.0, 1.0, 1.0]
-  #   to_rgb: False
+    image_size: [480, 416]
+  -
+    type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
   -
     type: MultiScaleFlipAug3D
     img_scale: [480, 416]
     pts_scale_ratio: 1
     flip: False
     transforms:
+      # -
+      #   type: PadMultiViewImage
+      #   size: [480, 416]  # 32 的倍数
       -
-        type: PadMultiViewImage
-        size: [480, 416]  # 32 的倍数
-      -
-        type: DefaultFormatBundle_2  
+        type: DefaultFormatBundle3D
+        classes: None
+        with_gt: false
+        with_label: false
       -
         type: CustomCollect3D
         keys: ['img', 'semantic_indices']
+        meta_keys: ["scene_token", "filename", "img_norm_cfg", "can_bus", "prev", "next"]
       
 
 data:
@@ -210,7 +217,7 @@ data:
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "metas_intersection.txt"}
+    ann_file: ${dataset_root + "metas_train.pkl"}
     pipeline: ${train_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -225,7 +232,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_intersection.txt"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -239,7 +246,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_intersection.txt"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -281,5 +288,5 @@ runner:
   type: EpochBasedRunner
   max_epochs: ${total_epochs}
 
-#momentum_config:
-#  policy: cyclic
+momentum_config:
+ policy: cyclic

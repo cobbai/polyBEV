@@ -206,7 +206,7 @@ train_pipeline:
     to_rgb: False
   -
     type: RandomScaleImageMultiViewImage
-    scales: [0.5]
+    scales: [0.2]
   -
     type: PadMultiViewImage
     size_divisor: 32
@@ -240,7 +240,7 @@ test_pipeline:
     transforms:
       -
         type: RandomScaleImageMultiViewImage
-        scales: [ 0.5 ]
+        scales: [ 0.2 ]
       -
         type: DefaultFormatBundle3D_2
         class_names: ${object_classes}

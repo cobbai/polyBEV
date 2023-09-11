@@ -51,6 +51,8 @@ def build_model(cfg, train_cfg=None, test_cfg=None):
         return BEVFORMERMODELS.build(
             cfg, default_args=dict(train_cfg=train_cfg, test_cfg=test_cfg)
         )
+    elif cfg.type == "BEVFusionLoc":
+        return build_fusion_model(cfg, train_cfg=train_cfg, test_cfg=test_cfg)
     else:
         raise "model type wrong!"
 
