@@ -22,8 +22,8 @@ class LoadMultiImageCustom(object):
         # import cv2
         # cv2.setNumThreads(0)
         if self.to_float32:
-            # img = [mmcv.imread(name).astype(np.float32) / 2.0 for name in filename]
-            img = [Image.open(name).convert("RGB").resize(self.image_size) for name in filename]
+            img = [mmcv.imread(name).astype(np.float32) for name in filename]
+            # img = [Image.open(name).convert("RGB").resize(self.image_size) for name in filename]
             # img = [np.concatenate([
             #     np.expand_dims(i, axis=2), 
             #     np.expand_dims(i, axis=2), 
@@ -33,15 +33,16 @@ class LoadMultiImageCustom(object):
             img = [Image.open(name) for name in filename]
         results['filename'] = filename
         results['img'] = img
-        results["img_shape"] = img[0].size
-        results["ori_shape"] = img[0].size
-        # Set initial values for default meta_keys
-        results["pad_shape"] = img[0].size
-        results["scale_factor"] = 1.0
+        # results["img_shape"] = img[0].size
+        # results["ori_shape"] = img[0].size
+        # # Set initial values for default meta_keys
+        # results["pad_shape"] = img[0].size
+        # results["scale_factor"] = 1.0
 
         # results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
         if self.label_size is not None:
-            semantic_indices = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            # semantic_indices = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            semantic_indices = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
             labels = np.zeros((len(self.classes), *self.label_size), dtype=np.long)
             for k, name in enumerate(self.classes):
                 masks = semantic_indices == k + 1
@@ -50,6 +51,7 @@ class LoadMultiImageCustom(object):
             results["gt_masks_bev"] = labels
         else:
             results["semantic_indices"] = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            # results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
 
         return results
 

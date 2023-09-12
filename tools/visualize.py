@@ -32,7 +32,7 @@ def show_seg(labels, car_img):
                [128, 0, 0], [64, 0, 128], [64, 0, 192], [192, 128, 64],
                [192, 192, 128], [64, 64, 128], [128, 0, 192], [192, 0, 64]]
     mask_colors = np.array(PALETTE)
-    img = np.zeros((200, 400, 3))
+    img = np.zeros((650, 400, 3))
 
     for index, mask_ in enumerate(labels):
         color_mask = mask_colors[index]
@@ -97,7 +97,7 @@ def main() -> None:
         dataset,
         samples_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=True,
+        dist=False,
         shuffle=False,
     )
 
@@ -130,7 +130,7 @@ def main() -> None:
             lidar2image = metas["lidar2image"] if "lidar2image" in metas else None
         else:
             metas = data["img_metas"][0].data[0][0]
-            name = metas["sample_idx"]
+            name = metas["scene_token"]
             lidar2image = metas["lidar2img"] if "lidar2img" in metas else None
 
         if args.mode == "pred":
@@ -216,12 +216,17 @@ def main() -> None:
                 masks,
                 classes=cfg.map_classes,
             )
+            # masks = outputs[0]['masks_bev']
+            # masks = onehot_encoding(masks).cpu().numpy()    
+            # fpath = os.path.join(args.out_dir, "map", f"{name}.png")
+            # mmcv.mkdir_or_exist(os.path.dirname(fpath))
+            # mmcv.imwrite(show_seg(masks.squeeze(), car_img_cv), fpath)
 
         # bevformer seg output
         if "semantic_indices" in outputs[0] and outputs[0]["seg_preds"] is not None:
             semantic = outputs[0]['seg_preds']
             semantic = onehot_encoding(semantic).cpu().numpy()
-            fpath = os.path.join(args.out_dir, "semantic", name + ".png")
+            fpath = os.path.join(args.out_dir, "semantic", f"{name}.png")
             mmcv.mkdir_or_exist(os.path.dirname(fpath))
             mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
@@ -231,9 +236,9 @@ def main() -> None:
                 one_hot = target_semantic_indices.new_full(semantic.shape, 0)
                 one_hot.scatter_(1, target_semantic_indices, 1)
                 semantic = one_hot.cpu().numpy().astype(np.float)
-                fpath = os.path.join(args.out_dir, "semantic", name + "_gt.png")
+                fpath = os.path.join(args.out_dir, "semantic", f"{name}_gt.png")
                 mmcv.mkdir_or_exist(os.path.dirname(fpath))
-                mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
+                mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)   
 
 
 if __name__ == "__main__":

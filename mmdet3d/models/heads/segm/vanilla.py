@@ -112,6 +112,16 @@ class BEVSegmentationHead(nn.Module):
             nn.Conv2d(in_channels, len(classes), 1),
         )
 
+        if self.loss == "CrossEntropyLoss":
+            from mmseg.models.builder import build_loss
+            loss_seg = dict(
+                type="CrossEntropyLoss",
+                use_sigmoid=False,
+                loss_weight=3.0,
+                class_weight=[ 0.5, 2.0, 2.0, 2.0 ]
+            )
+            self.loss_seg = build_loss(loss_seg)
+
     def forward(
         self,
         x: torch.Tensor,
@@ -129,7 +139,9 @@ class BEVSegmentationHead(nn.Module):
                 if self.loss == "xent":
                     loss = sigmoid_xent_loss(x[:, index], target[:, index])
                 elif self.loss == "focal":
-                    loss = sigmoid_focal_loss(x[:, index], target[:, index])
+                    loss = sigmoid_focal_loss(x[:, index], target[:, index])  # x:(1,3,650,400) target:(1,3,650,400)
+                elif self.loss == "CrossEntropyLoss":
+                    loss = self.loss_seg(x, target)  # x:(1,4,650,400) target:(1,650,400)
                 else:
                     raise ValueError(f"unsupported loss: {self.loss}")
                 losses[f"{name}/{self.loss}"] = loss

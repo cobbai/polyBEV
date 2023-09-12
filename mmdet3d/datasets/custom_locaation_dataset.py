@@ -173,7 +173,7 @@ class CustomLocationDataset(Dataset):
         Returns:
             dict: Testing data dict of the corresponding index.
         """
-        input_dict = self.data[index]
+        input_dict = self.data_infos[index]
         self.pre_pipeline(input_dict)
         example = self.pipeline(input_dict)
         return example
