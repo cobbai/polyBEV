@@ -56,7 +56,7 @@ model:
       requires_grad: False
     norm_eval: True
     style: pytorch
-    with_cp: False
+    with_cp: True
     dcn:
       type: DCNv2
       deform_groups: 1
@@ -97,9 +97,9 @@ model:
     transformer:
       type: PerceptionTransformer
       num_cams: 3
-      rotate_prev_bev: False
-      use_shift: False
-      use_can_bus: False
+      rotate_prev_bev: True
+      use_shift: True
+      use_can_bus: True
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
@@ -180,7 +180,7 @@ train_pipeline:
   -
     type: CustomCollect3D
     keys: ['img', 'semantic_indices']
-    meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next"]
+    meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
 
 test_pipeline:
   -
@@ -208,7 +208,7 @@ test_pipeline:
       -
         type: CustomCollect3D
         keys: ['img', 'semantic_indices']
-        meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next"]
+        meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
       
 
 data:
@@ -283,7 +283,7 @@ evaluation:
   pipeline: ${test_pipeline}
 
 total_epochs: 24
-# load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
+load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
 runner:
   type: EpochBasedRunner
   max_epochs: ${total_epochs}

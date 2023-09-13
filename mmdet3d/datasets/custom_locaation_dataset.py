@@ -78,6 +78,7 @@ class CustomLocationDataset(Dataset):
             timestamp=info["scene_token"],
             prev=info["prev"],
             next=info["next"],
+            can_bus=info["can_bus"],
             semantic_indices_file=info["semantic_indices_file"],
             img_filename=info["img_filename"]
         )
@@ -176,19 +177,19 @@ class CustomLocationDataset(Dataset):
             # first token
             if metas_map[i]['prev'] == None or metas_map[i]['prev'] != prev_token:
                 metas_map[i]['prev_bev_exists'] = False
-                # prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                # prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                # metas_map[i]['can_bus'][:3] = 0
-                # metas_map[i]['can_bus'][-1] = 0
+                prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
+                prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
+                metas_map[i]['can_bus'][:3] = 0
+                metas_map[i]['can_bus'][-1] = 0
             else:
                 metas_map[i]['prev_bev_exists'] = True
-                # tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-                # tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-                # metas_map[i]['can_bus'][:3] -= prev_pos
-                # metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
-                # metas_map[i]['can_bus'][-1] -= prev_angle
-                # prev_pos = copy.deepcopy(tmp_pos)
-                # prev_angle = copy.deepcopy(tmp_angle)
+                tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
+                tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
+                metas_map[i]['can_bus'][:3] -= prev_pos
+                metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
+                metas_map[i]['can_bus'][-1] -= prev_angle
+                prev_pos = copy.deepcopy(tmp_pos)
+                prev_angle = copy.deepcopy(tmp_angle)
             prev_token = metas_map[i]['scene_token']
 
         queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)

@@ -1,5 +1,7 @@
 import os
 import mmcv
+import numpy as np
+from nuscenes.eval.common.utils import quaternion_yaw, Quaternion
 
 def inter():
     _f30 = "data/out_123/images/30_30"
@@ -77,15 +79,15 @@ def init_metas(dataset_root, metas_path):
             temp["scene_token"] = time
 
             # can_bus
-            # can_bus = seg[1:]
-            # rotation = Quaternion([can_bus[6]] + can_bus[3:6])
-            # can_bus[3:7] = rotation
-            # patch_angle = quaternion_yaw(rotation) / np.pi * 180
-            # if patch_angle < 0:
-            #     patch_angle += 360
-            # can_bus[-2] = patch_angle / 180 * np.pi
-            # can_bus[-1] = patch_angle
-            # temp["can_bus"] = np.array(can_bus)
+            can_bus = seg[1:]
+            rotation = Quaternion([can_bus[6]] + can_bus[3:6])
+            can_bus[3:7] = rotation
+            patch_angle = quaternion_yaw(rotation) / np.pi * 180
+            if patch_angle < 0:
+                patch_angle += 360
+            can_bus[-2] = patch_angle / 180 * np.pi
+            can_bus[-1] = patch_angle
+            temp["can_bus"] = np.array(can_bus)
 
             temp["img_filename"] = [
                 os.path.join(dataset_root, "images", "30_30", str(time) + "00000.png"),
@@ -111,7 +113,7 @@ def init_metas(dataset_root, metas_path):
             result[i]["prev"] = result[i-1]["scene_token"]
             result[i]["next"] = result[i+1]["scene_token"]
 
-    # result = result[:300]
+    result = result[:300]
     datalen = len(result)
 
     mmcv.dump(result, "data/out_123/metas_train.pkl")
