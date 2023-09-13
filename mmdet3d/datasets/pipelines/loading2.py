@@ -2,7 +2,7 @@
 from typing import Any
 import mmcv
 import numpy as np
-from PIL import Image
+from PIL import Image,ImageOps
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
@@ -19,18 +19,18 @@ class LoadMultiImageCustom(object):
 
     def __call__(self, results) -> Any:
         filename = results['img_filename']
-        # import cv2
-        # cv2.setNumThreads(0)
-        if self.to_float32:
-            img = [mmcv.imread(name).astype(np.float32) for name in filename]
-            # img = [Image.open(name).convert("RGB").resize(self.image_size) for name in filename]
-            # img = [np.concatenate([
-            #     np.expand_dims(i, axis=2), 
-            #     np.expand_dims(i, axis=2), 
-            #     np.expand_dims(i, axis=2)
-            #     ], axis=2) for i in img]
-        else:
-            img = [Image.open(name) for name in filename]
+
+        # img = [mmcv.imread(name).astype(np.float32) for name in filename]
+        # img = [ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0)) for name in filename]
+        img = []
+        for name in filename:
+            if name.split("/")[-2] == "40_40":
+                img.append(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0), centering=(1, 0.5)))
+            elif name.split("/")[-2] == "40_45":
+                img.append(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0), centering=(0, 0.5)))
+            else:
+                img.append(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0)))
+
         results['filename'] = filename
         results['img'] = img
         # results["img_shape"] = img[0].size

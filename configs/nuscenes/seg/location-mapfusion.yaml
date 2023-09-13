@@ -46,7 +46,6 @@ augment2d:
 #   - divider
 
 map_classes:
-  - background
   - lane
   - divider
   - other
@@ -125,8 +124,8 @@ model:
         input_scope: [[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]]
         output_scope: [[-35, 30, 0.1], [-20, 20, 0.1]]
       classes: ${map_classes}
-      # loss: focal
-      loss: CrossEntropyLoss
+      loss: focal
+      # loss: CrossEntropyLoss
 
 train_pipeline:
   -
@@ -134,11 +133,11 @@ train_pipeline:
     type: LoadMultiImageCustom
     to_float32: true
     image_size: ${image_size}
-    # label_size: [650, 400]
+    label_size: [650, 400]
     classes: ${map_classes}
-  -
-    type: PadMultiViewImage
-    size: [480, 416]  # 32 的倍数
+  # -
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
   # -
   #   type: LoadPointsFromFile
   #   coord_type: LIDAR
@@ -274,9 +273,9 @@ test_pipeline:
     image_size: ${image_size}
     label_size: [650, 400]
     classes: ${map_classes}
-  -
-    type: PadMultiViewImage
-    size: [480, 416]  # 32 的倍数
+  # -
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
   # -
   #   type: LoadPointsFromFile
   #   coord_type: LIDAR

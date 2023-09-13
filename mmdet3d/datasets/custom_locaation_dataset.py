@@ -69,59 +69,20 @@ class CustomLocationDataset(Dataset):
         if not self.test_mode:
             self._set_group_flag()
 
+    def get_data_info(self, index: int) -> Dict[str, Any]:
+        info = self.data_infos[index]
 
-    def init_metas(self, dataset_root):
-        result = []
-        metas_path = self.ann_file
-
-        if not osp.exists(metas_path):
-            raise FileNotFoundError("need metas.txt file")
+        data = dict(
+            token=info["scene_token"],
+            scene_token=info['scene_token'],
+            timestamp=info["scene_token"],
+            prev=info["prev"],
+            next=info["next"],
+            semantic_indices_file=info["semantic_indices_file"],
+            img_filename=info["img_filename"]
+        )
         
-        # load metas.txt
-        with open(metas_path, "r", encoding="utf-8") as r:
-            line = r.readline()
-            while line:
-                temp = {}
-                seg = [float(x.strip("").strip(" ").strip("\n")) for x in line.split(",")]
-                time = seg[0]  # time name
-                temp["scene_token"] = time
-
-                # can_bus
-                can_bus = seg[1:]
-                rotation = Quaternion([can_bus[6]] + can_bus[3:6])
-                can_bus[3:7] = rotation
-                patch_angle = quaternion_yaw(rotation) / np.pi * 180
-                if patch_angle < 0:
-                    patch_angle += 360
-                can_bus[-2] = patch_angle / 180 * np.pi
-                can_bus[-1] = patch_angle
-                temp["can_bus"] = np.array(can_bus)
-
-                temp["img_filename"] = [
-                    osp.join(dataset_root, "images", "30_30", str(time) + "00000.png"),
-                    osp.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
-                    osp.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
-                    ]
-                temp["semantic_indices_file"] = osp.join(dataset_root, "label", "40_65", str(time) + "00000.png")
-                result.append(temp)
-                line = r.readline()
-
-        # sort by timestamp
-        result = sorted(result, key=lambda x: x["scene_token"])
-
-        # pre next timestamp
-        for i in range(len(result)):
-            if i == 0:
-                result[i]["prev"] = None
-                result[i]["next"] = result[i+1]["scene_token"]
-            elif i == len(result) - 1:
-                result[i]["prev"] = result[i-1]["scene_token"]
-                result[i]["next"] = None
-            else:
-                result[i]["prev"] = result[i-1]["scene_token"]
-                result[i]["next"] = result[i+1]["scene_token"]
-
-        return result
+        return data
 
     def __len__(self):
         return len(self.data_infos)
@@ -156,7 +117,7 @@ class CustomLocationDataset(Dataset):
         index_list.append(index) # 构成t-2， t-1， t的数据索引，-1为当前帧
         for i in index_list:
             i = max(0, i)
-            input_dict = self.data_infos[i]
+            input_dict = self.get_data_info(index)
             if input_dict is None:
                 return None
             self.pre_pipeline(input_dict)

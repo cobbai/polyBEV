@@ -165,9 +165,9 @@ train_pipeline:
     type: LoadMultiImageCustom
     to_float32: true
     image_size: [480, 416]
-  -
-    type: PadMultiViewImage
-    size: [480, 416]  # 32 的倍数
+  # -
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
   -
     type: ImageNormalize
     mean: [0.485, 0.456, 0.406]
@@ -193,9 +193,9 @@ test_pipeline:
     pts_scale_ratio: 1
     flip: False
     transforms:
-      -
-        type: PadMultiViewImage
-        size: [480, 416]  # 32 的倍数
+      # -
+      #   type: PadMultiViewImage
+      #   size: [480, 416]  # 32 的倍数
       -
         type: ImageNormalize
         mean: [0.485, 0.456, 0.406]
@@ -283,7 +283,7 @@ evaluation:
   pipeline: ${test_pipeline}
 
 total_epochs: 24
-load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
+# load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
 runner:
   type: EpochBasedRunner
   max_epochs: ${total_epochs}

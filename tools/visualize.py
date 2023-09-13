@@ -216,11 +216,6 @@ def main() -> None:
                 masks,
                 classes=cfg.map_classes,
             )
-            # masks = outputs[0]['masks_bev']
-            # masks = onehot_encoding(masks).cpu().numpy()    
-            # fpath = os.path.join(args.out_dir, "map", f"{name}.png")
-            # mmcv.mkdir_or_exist(os.path.dirname(fpath))
-            # mmcv.imwrite(show_seg(masks.squeeze(), car_img_cv), fpath)
 
         # bevformer seg output
         if "semantic_indices" in outputs[0] and outputs[0]["seg_preds"] is not None:
@@ -238,7 +233,7 @@ def main() -> None:
                 semantic = one_hot.cpu().numpy().astype(np.float)
                 fpath = os.path.join(args.out_dir, "semantic", f"{name}_gt.png")
                 mmcv.mkdir_or_exist(os.path.dirname(fpath))
-                mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)   
+                mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
 
 if __name__ == "__main__":
