@@ -268,20 +268,20 @@ class BEVFormer(MVXTwoStageDetector):
             self.prev_frame_info['prev_bev'] = None
 
         # Get the delta of ego position and angle between two timestamps.
-        # tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
-        # tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
-        # if self.prev_frame_info['prev_bev'] is not None:
-        #     img_metas[0][0]['can_bus'][:3] -= self.prev_frame_info['prev_pos']
-        #     img_metas[0][0]['can_bus'][-1] -= self.prev_frame_info['prev_angle']
-        # else:
-        #     img_metas[0][0]['can_bus'][-1] = 0
-        #     img_metas[0][0]['can_bus'][:3] = 0
+        tmp_pos = copy.deepcopy(img_metas[0][0]['can_bus'][:3])
+        tmp_angle = copy.deepcopy(img_metas[0][0]['can_bus'][-1])
+        if self.prev_frame_info['prev_bev'] is not None:
+            img_metas[0][0]['can_bus'][:3] -= self.prev_frame_info['prev_pos']
+            img_metas[0][0]['can_bus'][-1] -= self.prev_frame_info['prev_angle']
+        else:
+            img_metas[0][0]['can_bus'][-1] = 0
+            img_metas[0][0]['can_bus'][:3] = 0
 
         new_prev_bev, bbox_results = self.simple_test(
             img_metas[0], img[0], prev_bev=self.prev_frame_info['prev_bev'], **kwargs)
         # During inference, we save the BEV features and ego motion of each timestamp.
-        # self.prev_frame_info['prev_pos'] = tmp_pos
-        # self.prev_frame_info['prev_angle'] = tmp_angle
+        self.prev_frame_info['prev_pos'] = tmp_pos
+        self.prev_frame_info['prev_angle'] = tmp_angle
         self.prev_frame_info['prev_bev'] = new_prev_bev
 
         return bbox_results
