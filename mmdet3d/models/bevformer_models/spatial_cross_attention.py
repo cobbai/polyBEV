@@ -102,7 +102,8 @@ class CustomCrossAttention(BaseModule):
             bs * num_cams, l, self.embed_dims)
 
         # TODO: [1,40000, 256] --> [3, 40000, 256] V有3张特征图，因此对Q构造3层BEV特征分别查
-        query = torch.stack([query[0], query[0], query[0]], dim=0)
+        query = torch.stack([query[0], query[0]], dim=0)
+        reference_points = torch.stack([reference_points[0], reference_points[0]], dim=0)
 
         queries = self.deformable_attention(query, key=key, value=value,
                                             reference_points=reference_points, spatial_shapes=spatial_shapes,

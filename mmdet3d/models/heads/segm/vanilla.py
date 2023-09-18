@@ -95,6 +95,7 @@ class BEVSegmentationHead(nn.Module):
         grid_transform: Dict[str, Any],
         classes: List[str],
         loss: str,
+        seg_encoder=None,
     ) -> None:
         super().__init__()
         self.in_channels = in_channels
@@ -122,6 +123,11 @@ class BEVSegmentationHead(nn.Module):
             )
             self.loss_seg = build_loss(loss_seg)
 
+            self.seg_decoder = None
+            if seg_encoder:
+                from mmdet3d.models.builder import build_seg_encoder
+                self.seg_decoder = build_seg_encoder(seg_encoder)
+
     def forward(
         self,
         x: torch.Tensor,
@@ -131,7 +137,10 @@ class BEVSegmentationHead(nn.Module):
             x = x[0]
 
         x = self.transform(x)
-        x = self.classifier(x)
+        if self.seg_decoder: 
+            x = self.seg_decoder(x)
+        else:
+            x = self.classifier(x)
 
         if self.training:
             losses = {}

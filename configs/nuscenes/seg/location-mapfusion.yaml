@@ -46,6 +46,7 @@ augment2d:
 #   - divider
 
 map_classes:
+  - background
   - lane
   - divider
   - other
@@ -81,6 +82,22 @@ model:
         init_cfg:
           type: None  # Pretrained
           checkpoint: https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
+        # type: ResNet
+        # depth: 50
+        # num_stages: 4
+        # out_indices: [1, 2, 3]
+        # frozen_stages: 1
+        # norm_cfg:
+        #   type: BN2d
+        #   requires_grad: False
+        # norm_eval: True
+        # style: pytorch
+        # with_cp: False
+        # dcn:
+        #   type: DCNv2
+        #   deform_groups: 1
+        #   fallback_on_stride: False
+        # stage_with_dcn: [False, False, True, True]
       neck:
         type: GeneralizedLSSFPN
         in_channels: [192, 384, 768]
@@ -121,11 +138,16 @@ model:
       type: BEVSegmentationHead
       in_channels: 256
       grid_transform:
-        input_scope: [[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]]
+        input_scope: [[-51.2, 51.2, 0.68], [-51.2, 51.2, 0.68]]
         output_scope: [[-35, 30, 0.1], [-20, 20, 0.1]]
       classes: ${map_classes}
-      loss: focal
-      # loss: CrossEntropyLoss
+      # loss: focal
+      loss: CrossEntropyLoss
+      seg_encoder:
+        type: SegEncode
+        inC: 256
+        outC: 4
+        scale_factor: ${(3.97, 4)}
 
 train_pipeline:
   -
@@ -133,7 +155,7 @@ train_pipeline:
     type: LoadMultiImageCustom
     to_float32: true
     image_size: ${image_size}
-    label_size: [650, 400]
+    # label_size: [650, 400]
     classes: ${map_classes}
   # -
   #   type: PadMultiViewImage
@@ -271,7 +293,7 @@ test_pipeline:
     type: LoadMultiImageCustom
     to_float32: true
     image_size: ${image_size}
-    label_size: [650, 400]
+    # label_size: [650, 400]
     classes: ${map_classes}
   # -
   #   type: PadMultiViewImage

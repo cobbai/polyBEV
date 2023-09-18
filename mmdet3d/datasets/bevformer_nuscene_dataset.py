@@ -105,6 +105,7 @@ class CustomNuScenesDataset(NuScenesDataset):
         random.shuffle(index_list) # 打乱
         index_list = sorted(index_list[1:]) #三选2，增加不确定性
         index_list.append(index) # 构成t-2， t-1， t的数据索引
+        # index_list = [202, 203, 204, 205]
         for i in index_list:
             i = max(0, i)
             input_dict = self.get_data_info(i)

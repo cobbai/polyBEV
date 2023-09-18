@@ -112,13 +112,14 @@ class CustomLocationDataset(Dataset):
         """
 
         queue = [] # 设置时序依赖数据保存在队列里
-        index_list = list(range(index-self.queue_length, index)) # 取出后三个
-        random.shuffle(index_list) # 打乱
-        index_list = sorted(index_list[1:]) #三选2，增加不确定性
-        index_list.append(index) # 构成t-2， t-1， t的数据索引，-1为当前帧
+        # index_list = list(range(index-self.queue_length, index)) # 取出后三个
+        # random.shuffle(index_list) # 打乱
+        # index_list = sorted(index_list[1:]) #三选2，增加不确定性
+        # index_list.append(index) # 构成t-2， t-1， t的数据索引，-1为当前帧
+        index_list = [index - 1, index, index + 1]
         for i in index_list:
-            i = max(0, i)
-            input_dict = self.get_data_info(index)
+            i = max(0, i) if i < self.__len__() else i - 1
+            input_dict = self.get_data_info(i)
             if input_dict is None:
                 return None
             self.pre_pipeline(input_dict)
@@ -186,7 +187,7 @@ class CustomLocationDataset(Dataset):
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] -= prev_pos
-                metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
+                # metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
                 metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
