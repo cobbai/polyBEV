@@ -38,8 +38,11 @@ TemporalSelfAttention:
 CustomCrossAttention:
   type: CustomCrossAttention
   embed_dims: ${_dim_}
-  num_points: 8
-  num_levels: 1
+  deformable_attention:
+    type: MSDeformableAttention3D
+    embed_dims: ${_dim_}
+    num_points: 8
+    num_levels: ${_num_levels_}
 
 model:
   type: BEVFormer

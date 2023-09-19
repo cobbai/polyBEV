@@ -101,12 +101,19 @@ class CustomCrossAttention(BaseModule):
         value = value.permute(2, 0, 1, 3).reshape(
             bs * num_cams, l, self.embed_dims)
 
-        # TODO: [1,40000, 256] --> [3, 40000, 256] V有3张特征图，因此对Q构造3层BEV特征分别查
-        query = torch.stack([query[0], query[0]], dim=0)
-        reference_points = torch.stack([reference_points[0], reference_points[0]], dim=0)
+        # TODO: 暂时全查
+        max_len = num_query
+        D = reference_points.size(-2)
+        queries_rebatch = query.new_zeros([bs, num_cams, max_len, self.embed_dims])
+        reference_points_rebatch = reference_points.new_zeros([bs, num_cams, max_len, D, 2])
 
-        queries = self.deformable_attention(query, key=key, value=value,
-                                            reference_points=reference_points, spatial_shapes=spatial_shapes,
+        for j in range(bs):
+            for i in range(num_cams):
+                queries_rebatch[j, i, :max_len] = query[j, :max_len]
+                reference_points_rebatch[j, i, :max_len] = reference_points[j, :max_len]
+
+        queries = self.deformable_attention(query=queries_rebatch.view(bs*num_cams, max_len, self.embed_dims), key=key, value=value,
+                                            reference_points=reference_points_rebatch.view(bs*num_cams, max_len, D, 2), spatial_shapes=spatial_shapes,
                                             level_start_index=level_start_index) # .view(bs, self.num_cams, max_len, self.embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
         queries = queries.permute(1, 2, 0)
@@ -245,7 +252,7 @@ class SpatialCrossAttention(BaseModule):
         for j in range(bs):
             for i, reference_points_per_img in enumerate(reference_points_cam):   
                 index_query_per_img = indexes[i]
-                queries_rebatch[j, i, :len(index_query_per_img)] = query[j, index_query_per_img]
+                queries_rebatch[j, i, :len(index_query_per_img)] = query[j, index_query_per_img]  # 取 query 需要的索引位置，添加到 queries_rebatch
                 reference_points_rebatch[j, i, :len(index_query_per_img)] = reference_points_per_img[j, index_query_per_img]
 
         num_cams, l, bs, embed_dims = key.shape
@@ -423,22 +430,22 @@ class MSDeformableAttention3D(BaseModule):
             query = query.permute(1, 0, 2)
             value = value.permute(1, 0, 2)
 
-        bs_q, num_query, _ = query.shape
-        bs_v, num_value, _ = value.shape
+        bs, num_query, _ = query.shape
+        bs, num_value, _ = value.shape
         assert (spatial_shapes[:, 0] * spatial_shapes[:, 1]).sum() == num_value
 
         value = self.value_proj(value)
         if key_padding_mask is not None:
             value = value.masked_fill(key_padding_mask[..., None], 0.0)
-        value = value.view(bs_v, num_value, self.num_heads, -1)
+        value = value.view(bs, num_value, self.num_heads, -1)
         sampling_offsets = self.sampling_offsets(query).view(
-            bs_q, num_query, self.num_heads, self.num_levels, self.num_points, 2)
+            bs, num_query, self.num_heads, self.num_levels, self.num_points, 2)
         attention_weights = self.attention_weights(query).view(
-            bs_q, num_query, self.num_heads, self.num_levels * self.num_points)
+            bs, num_query, self.num_heads, self.num_levels * self.num_points)
 
         attention_weights = attention_weights.softmax(-1)
 
-        attention_weights = attention_weights.view(bs_q, num_query,
+        attention_weights = attention_weights.view(bs, num_query,
                                                    self.num_heads,
                                                    self.num_levels,
                                                    self.num_points)
