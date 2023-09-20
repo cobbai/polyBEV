@@ -16,8 +16,8 @@ def inter():
     _f465 = os.listdir(_f465)
     _f65 = os.listdir(_f65)
 
-    # a = set(_f40).intersection(set(_f45))
-    a = set(_f465)
+    a = set(_f40).intersection(set(_f45))
+    # a = set(_f465)
     b = a.intersection(set(_f30))
     c = b.intersection(set(_f65))
     print(c)
@@ -94,9 +94,9 @@ def init_metas(dataset_root, metas_path):
 
             temp["img_filename"] = [
                 os.path.join(dataset_root, "images", "30_30", str(time) + "00000.png"),
-                # os.path.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
-                # os.path.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
-                os.path.join(dataset_root, "images", "40_65", str(time) + "00000.png"),
+                os.path.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
+                os.path.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
+                # os.path.join(dataset_root, "images", "40_65", str(time) + "00000.png"),
                 ]
             temp["semantic_indices_file"] = os.path.join(dataset_root, "label", "40_65", str(time) + "00000.png")
             result.append(temp)
@@ -117,7 +117,7 @@ def init_metas(dataset_root, metas_path):
             result[i]["prev"] = result[i-1]["scene_token"]
             result[i]["next"] = result[i+1]["scene_token"]
 
-    # result = result[:300]
+    result = result[800:1000]
     datalen = len(result)
 
     mmcv.dump(result, "data/out_123/metas_train.pkl")

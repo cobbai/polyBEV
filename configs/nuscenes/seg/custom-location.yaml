@@ -22,8 +22,8 @@ map_grid_conf:
   dbound: [1.0, 60.0, 1.0]
 
 grid_conf: ${map_grid_conf}
-bev_h_: 50
-bev_w_: 50
+bev_h_: 100
+bev_w_: 100
 bev_size: ${[bev_h_, bev_w_]}
 queue_length: 3
 _dim_: 256
@@ -50,7 +50,7 @@ model:
   video_test_mode: True
   img_backbone:
     type: ResNet
-    depth: 101
+    depth: 50
     num_stages: 4
     out_indices: [1, 2, 3]
     frozen_stages: 1
@@ -235,7 +235,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_val.pkl"}
+    ann_file: ${dataset_root + "metas_train.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -249,7 +249,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_val.pkl"}
+    ann_file: ${dataset_root + "metas_train.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}

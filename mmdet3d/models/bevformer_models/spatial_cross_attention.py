@@ -102,18 +102,24 @@ class CustomCrossAttention(BaseModule):
             bs * num_cams, l, self.embed_dims)
 
         # TODO: 暂时全查
-        max_len = num_query
-        D = reference_points.size(-2)
-        queries_rebatch = query.new_zeros([bs, num_cams, max_len, self.embed_dims])
-        reference_points_rebatch = reference_points.new_zeros([bs, num_cams, max_len, D, 2])
+        # max_len = num_query
+        # D = reference_points.size(-2)
+        # queries_rebatch = query.new_zeros([bs, num_cams, max_len, self.embed_dims])
+        # reference_points_rebatch = reference_points.new_zeros([bs, num_cams, max_len, D, 2])
 
-        for j in range(bs):
-            for i in range(num_cams):
-                queries_rebatch[j, i, :max_len] = query[j, :max_len]
-                reference_points_rebatch[j, i, :max_len] = reference_points[j, :max_len]
+        # for j in range(bs):
+        #     for i in range(num_cams):
+        #         queries_rebatch[j, i, :max_len] = query[j, :max_len]
+        #         reference_points_rebatch[j, i, :max_len] = reference_points[j, :max_len]
 
-        queries = self.deformable_attention(query=queries_rebatch.view(bs*num_cams, max_len, self.embed_dims), key=key, value=value,
-                                            reference_points=reference_points_rebatch.view(bs*num_cams, max_len, D, 2), spatial_shapes=spatial_shapes,
+        # queries_rebatch = queries_rebatch.view(bs*num_cams, max_len, self.embed_dims)
+        # reference_points_rebatch = reference_points_rebatch.view(bs*num_cams, max_len, D, 2)
+
+        queries_rebatch =  torch.cat([query, query, query], 0)
+        reference_points_rebatch = torch.cat([reference_points, reference_points, reference_points], 0)
+
+        queries = self.deformable_attention(query=queries_rebatch, key=key, value=value,
+                                            reference_points=reference_points_rebatch, spatial_shapes=spatial_shapes,
                                             level_start_index=level_start_index) # .view(bs, self.num_cams, max_len, self.embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
         queries = queries.permute(1, 2, 0)

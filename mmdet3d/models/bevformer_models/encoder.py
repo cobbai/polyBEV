@@ -184,7 +184,17 @@ class BEVFormerEncoder(TransformerLayerSequence):
             bev_h, bev_w, dim='2d', bs=bev_query.size(1), device=bev_query.device, dtype=bev_query.dtype) # TSA需要的是2d的采样点，在BEV上
 
         if self.dataset_type == "custom":
-            ref_3d = ref_2d.clone()
+            # ref_3d = copy.deepcopy(ref_2d)  # .clone()
+            
+            ref_3d_zero = torch.zeros([ref_2d.size(0), ref_2d.size(1), 4, ref_2d.size(3)], device=ref_2d.device, dtype=ref_2d.dtype)
+            step_y = 0.1 / bev_h
+            step_x = 0.1 / bev_w
+            ref_3d_zero[:, :, 0, :] = torch.tensor([-step_x, -step_y])
+            ref_3d_zero[:, :, 1, :] = torch.tensor([step_x, -step_y])
+            ref_3d_zero[:, :, 2, :] = torch.tensor([-step_x, step_y])
+            ref_3d_zero[:, :, 3, :] = torch.tensor([step_x, step_y])
+            ref_3d = ref_3d_zero + ref_2d
+
             reference_points_cam, bev_mask = None, None
         else:
             ref_3d = self.get_reference_points(
@@ -193,7 +203,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 ref_3d, self.pc_range, kwargs['img_metas'])
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
-        shift_ref_2d = ref_2d.clone()
+        shift_ref_2d = copy.deepcopy(ref_2d)  # .clone()
         shift_ref_2d += shift[:, None, None, :]
 
         # (num_query, bs, embed_dims) -> (bs, num_query, embed_dims)
