@@ -46,7 +46,7 @@ CustomCrossAttention:
 
 model:
   type: BEVFormer
-  use_grid_mask: True
+  use_grid_mask: False
   video_test_mode: True
   img_backbone:
     type: ResNet

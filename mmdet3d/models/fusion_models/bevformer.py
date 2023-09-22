@@ -7,7 +7,6 @@ from mmdet3d.models.detectors.mvx_two_stage import MVXTwoStageDetector
 from mmdet3d.models.utils.grid_mask import GridMask
 import copy
 
-
 @BEVFORMERMODELS.register_module()
 class BEVFormer(MVXTwoStageDetector):
     """BEVFormer.
@@ -75,6 +74,14 @@ class BEVFormer(MVXTwoStageDetector):
                 img = self.grid_mask(img)
 
             img_feats = self.img_backbone(img)
+            
+            # from mmdet3d.utils.visualization import Visualizer
+            # visualizer = Visualizer()
+            # visualizer(img[-1], win_name="imgn")
+            # visualizer(img_feats[0][0], win_name="backbone[0][0]")
+            # visualizer(img_feats[1][0], win_name="backbone[1][0]")
+            # visualizer(img_feats[2][0], win_name="backbone[2][0]")
+
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
         else:

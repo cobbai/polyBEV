@@ -7,7 +7,7 @@ from mmcv.cnn import xavier_init, constant_init
 from mmcv.cnn.bricks.registry import (ATTENTION,
                                       TRANSFORMER_LAYER,
                                       TRANSFORMER_LAYER_SEQUENCE)
-from mmcv.cnn.bricks.transformer import build_attention
+from mmcv.cnn.bricks.transformer import build_attention, build_positional_encoding
 import math
 from mmcv.runner import force_fp32, auto_fp16
 
@@ -59,6 +59,13 @@ class CustomCrossAttention(BaseModule):
         self.num_cams = num_cams
         self.output_proj = nn.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
+
+        # self.positional_encoding = build_positional_encoding(
+        #     dict(type='SinePositionalEncoding',
+        #         num_feats=128,
+        #         normalize=True)
+        # )
+
         self.init_weight()
 
     def init_weight(self):
@@ -117,6 +124,14 @@ class CustomCrossAttention(BaseModule):
 
         queries_rebatch =  torch.cat([query, query, query], 0)
         reference_points_rebatch = torch.cat([reference_points, reference_points, reference_points], 0)
+
+        # query_mask = torch.zeros((queries_rebatch.size(0), int(queries_rebatch.size(1) ** 0.5), int(queries_rebatch.size(1) ** 0.5)), device=queries_rebatch.device).to(queries_rebatch.dtype)
+        # query_pos = self.positional_encoding(query_mask).to(queries_rebatch.dtype)
+        # queries_rebatch = queries_rebatch + query_pos.flatten(2).permute(0, 2, 1)
+        
+        # value_mask = torch.zeros((value.size(0), value.size(1), 1), device=value.device).to(value.dtype)
+        # value_pos = self.positional_encoding(value_mask).to(value.dtype)
+        # value = value + value_pos.flatten(2).permute(0, 2, 1)
 
         queries = self.deformable_attention(query=queries_rebatch, key=key, value=value,
                                             reference_points=reference_points_rebatch, spatial_shapes=spatial_shapes,
