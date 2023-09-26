@@ -569,7 +569,7 @@ class BEVFormerHead(DETRHead):
         """
         loss_dict = dict()
         seg_preds = pred_dicts['seg_preds']
-        seg_loss = self.loss_seg(seg_preds, semantic_gt)
+        seg_loss = self.loss_seg(seg_preds, semantic_gt)  # x:(1,4,650,400) target:(1,650,400)
         loss_dict['loss_seg'] = seg_loss
         return loss_dict
 

@@ -39,10 +39,10 @@ class PadMultiViewImage(object):
             padded_img = [mmcv.impad_to_multiple(
                 img, self.size_divisor, pad_val=self.pad_val) for img in results['img']]
         
-        results['ori_shape'] = [img.shape for img in results['img']]
+        # results['ori_shape'] = [img.shape for img in results['img']]
         results['img'] = padded_img
-        results['img_shape'] = [img.shape for img in padded_img]
-        results['pad_shape'] = [img.shape for img in padded_img]
+        # results['img_shape'] = [img.shape for img in padded_img]
+        # results['pad_shape'] = [img.shape for img in padded_img]
         results['pad_fixed_size'] = self.size
         results['pad_size_divisor'] = self.size_divisor
 

@@ -40,6 +40,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
         self.pc_range = pc_range
         self.fp16_enabled = False
 
+        self.dataset_type = dataset_type
+
     @staticmethod
     def get_reference_points(H, W, Z=8, num_points_in_pillar=4, dim='3d', bs=1, device='cuda', dtype=torch.float):
         """Get the reference points used in SCA and TSA.
@@ -177,17 +179,50 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         output = bev_query
         intermediate = []
-        # 现在还没表示真实世界空间坐标
-        ref_3d = self.get_reference_points(
-            bev_h, bev_w, self.pc_range[5]-self.pc_range[2], self.num_points_in_pillar, dim='3d', bs=bev_query.size(1),  device=bev_query.device, dtype=bev_query.dtype) #3D点后续用于SCA
+        # 采样bev特征图上的位置坐标，现在还没表示真实世界空间坐标
         ref_2d = self.get_reference_points(
             bev_h, bev_w, dim='2d', bs=bev_query.size(1), device=bev_query.device, dtype=bev_query.dtype) # TSA需要的是2d的采样点，在BEV上
 
-        reference_points_cam, bev_mask = self.point_sampling(
-            ref_3d, self.pc_range, kwargs['img_metas'])
+        if self.dataset_type == "custom":
+            ref_3d_65 = copy.deepcopy(ref_2d)  # .clone()
+            ref_3d_30 = copy.deepcopy(ref_2d)  # .clone()
+            
+            # 40_65
+            ref_3d_65[..., 0:1] = ref_3d_65[..., 0:1] * 400 -200
+            ref_3d_65[..., 0] /= 400
+            ref_3d_65[..., 1:2] = ref_3d_65[..., 1:2] * 650 -350
+            ref_3d_65[..., 1] /= 650
+
+            # 30_30
+            ref_3d_30[..., 0:1] = ref_3d_30[..., 0:1] * 400 -200
+            ref_3d_30[..., 1:2] = ref_3d_30[..., 1:2] * 650 -350
+            ref_3d_30[ref_3d_30[:, :, :, 0] < -150] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 0] > 150] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 1] > 0] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 1] < -300] = 0
+            ref_3d_30[..., 0] /= 400
+            ref_3d_30[..., 1] /= 650
+            ref_3d = torch.stack([ref_3d_65[0], ref_3d_30[0]], dim=0)
+
+            # ref_3d_zero = torch.zeros([ref_2d.size(0), ref_2d.size(1), 9, ref_2d.size(3)], device=ref_2d.device, dtype=ref_2d.dtype)
+            # step_y = 0.1 / bev_h
+            # step_x = 0.1 / bev_w
+            # ref_3d_zero[:, :, 0, :] = torch.tensor([-step_x, -step_y])
+            # ref_3d_zero[:, :, 1, :] = torch.tensor([0.0, -step_y])
+            # ref_3d_zero[:, :, 2, :] = torch.tensor([step_x, -step_y])
+            # ref_3d_zero[:, :, 3, :] = torch.tensor([-step_x, 0.0])
+            # ref_3d_zero[:, :, 4, :] = torch.tensor([0.0, 0.0])
+            # ref_3d = ref_3d_zero + ref_2d
+
+            reference_points_cam, bev_mask = None, None
+        else:
+            ref_3d = self.get_reference_points(
+                bev_h, bev_w, self.pc_range[5]-self.pc_range[2], self.num_points_in_pillar, dim='3d', bs=bev_query.size(1),  device=bev_query.device, dtype=bev_query.dtype) #3D点后续用于SCA
+            reference_points_cam, bev_mask = self.point_sampling(
+                ref_3d, self.pc_range, kwargs['img_metas'])
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
-        shift_ref_2d = ref_2d  # .clone()
+        shift_ref_2d = copy.deepcopy(ref_2d)  # .clone()
         shift_ref_2d += shift[:, None, None, :]
 
         # (num_query, bs, embed_dims) -> (bs, num_query, embed_dims)
@@ -349,6 +384,9 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         for layer in self.operation_order:
             # temporal self attention
             if layer == 'self_attn':
+                # from mmdet3d.utils.visualization import Visualizer
+                # visualizer = Visualizer()
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="7")
 
                 query = self.attentions[attn_index](
                     query,
@@ -367,12 +405,18 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 attn_index += 1
                 identity = query
 
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="8")
+
             elif layer == 'norm':
                 query = self.norms[norm_index](query)
                 norm_index += 1
 
             # spaital cross attention
             elif layer == 'cross_attn':
+                # from mmdet3d.utils.visualization import Visualizer
+                # visualizer = Visualizer()
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="9")
+
                 query = self.attentions[attn_index](
                     query,
                     key,
@@ -390,6 +434,8 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     **kwargs)
                 attn_index += 1
                 identity = query
+
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="10")
 
             elif layer == 'ffn':
                 query = self.ffns[ffn_index](

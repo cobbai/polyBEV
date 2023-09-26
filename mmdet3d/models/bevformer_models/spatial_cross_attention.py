@@ -7,7 +7,7 @@ from mmcv.cnn import xavier_init, constant_init
 from mmcv.cnn.bricks.registry import (ATTENTION,
                                       TRANSFORMER_LAYER,
                                       TRANSFORMER_LAYER_SEQUENCE)
-from mmcv.cnn.bricks.transformer import build_attention
+from mmcv.cnn.bricks.transformer import build_attention, build_positional_encoding
 import math
 from mmcv.runner import force_fp32, auto_fp16
 
@@ -19,6 +19,137 @@ from .multi_scale_deformable_attn_function import MultiScaleDeformableAttnFuncti
 # from projects.mmdet3d_plugin.models.utils.bricks import run_time
 ext_module = ext_loader.load_ext(
     '_ext', ['ms_deform_attn_backward', 'ms_deform_attn_forward'])
+
+
+@ATTENTION.register_module()
+class CustomCrossAttention(BaseModule):
+    """An attention module used in BEVFormer.
+    Args:
+        embed_dims (int): The embedding dimension of Attention.
+            Default: 256.
+        num_cams (int): The number of cameras
+        dropout (float): A Dropout layer on `inp_residual`.
+            Default: 0..
+        init_cfg (obj:`mmcv.ConfigDict`): The Config for initialization.
+            Default: None.
+        deformable_attention: (dict): The config for the deformable attention used in SCA.
+    """
+
+    def __init__(self,
+                 embed_dims=256,
+                 num_cams=6,
+                 pc_range=None,
+                 dropout=0.1,
+                 init_cfg=None,
+                 batch_first=False,
+                 deformable_attention=dict(
+                     type='MSDeformableAttention3D',
+                     embed_dims=256,
+                     num_levels=4),
+                 **kwargs
+                 ):
+        super(CustomCrossAttention, self).__init__(init_cfg)
+
+        self.init_cfg = init_cfg
+        self.dropout = nn.Dropout(dropout)
+        self.pc_range = pc_range
+        self.fp16_enabled = False
+        self.deformable_attention = build_attention(deformable_attention)
+        self.embed_dims = embed_dims
+        self.num_cams = num_cams
+        self.output_proj = nn.Linear(embed_dims, embed_dims)
+        self.batch_first = batch_first
+
+        # self.positional_encoding = build_positional_encoding(
+        #     dict(type='SinePositionalEncoding',
+        #         num_feats=128,
+        #         normalize=True)
+        # )
+
+        self.init_weight()
+
+    def init_weight(self):
+        """Default initialization for Parameters of Module."""
+        xavier_init(self.output_proj, distribution='uniform', bias=0.)
+    
+    @force_fp32(apply_to=('query', 'key', 'value', 'query_pos', 'reference_points_cam'))
+    def forward(self,
+                query,
+                key,
+                value,
+                residual=None,
+                query_pos=None,
+                key_padding_mask=None,
+                reference_points=None,
+                spatial_shapes=None,
+                reference_points_cam=None,
+                bev_mask=None,
+                level_start_index=None,
+                flag='encoder',
+                **kwargs):
+
+        if key is None:
+            key = query
+        if value is None:
+            value = key
+
+        if residual is None:
+            inp_residual = query
+            slots = torch.zeros_like(query)
+        if query_pos is not None:
+            query = query + query_pos
+
+        bs, num_query, _ = query.size()
+
+        num_cams, l, bs, embed_dims = key.shape
+
+        key = key.permute(2, 0, 1, 3).reshape(
+            bs * num_cams, l, self.embed_dims)
+        value = value.permute(2, 0, 1, 3).reshape(
+            bs * num_cams, l, self.embed_dims)
+
+        # TODO: 暂时全查
+        # max_len = num_query
+        # D = reference_points.size(-2)
+        # queries_rebatch = query.new_zeros([bs, num_cams, max_len, self.embed_dims])
+        # reference_points_rebatch = reference_points.new_zeros([bs, num_cams, max_len, D, 2])
+
+        # for j in range(bs):
+        #     for i in range(num_cams):
+        #         queries_rebatch[j, i, :max_len] = query[j, :max_len]
+        #         reference_points_rebatch[j, i, :max_len] = reference_points[j, :max_len]
+
+        # queries_rebatch = queries_rebatch.view(bs*num_cams, max_len, self.embed_dims)
+        # reference_points_rebatch = reference_points_rebatch.view(bs*num_cams, max_len, D, 2)
+
+        queries_rebatch =  torch.stack([query[0], query[0]], dim=0)
+        reference_points_rebatch = reference_points
+
+        # query_mask = torch.zeros((queries_rebatch.size(0), int(queries_rebatch.size(1) ** 0.5), int(queries_rebatch.size(1) ** 0.5)), device=queries_rebatch.device).to(queries_rebatch.dtype)
+        # query_pos = self.positional_encoding(query_mask).to(queries_rebatch.dtype)
+        # queries_rebatch = queries_rebatch + query_pos.flatten(2).permute(0, 2, 1)
+        
+        # value_mask = torch.zeros((value.size(0), value.size(1), 1), device=value.device).to(value.dtype)
+        # value_pos = self.positional_encoding(value_mask).to(value.dtype)
+        # value = value + value_pos.flatten(2).permute(0, 2, 1)
+
+        queries = self.deformable_attention(query=queries_rebatch, key=key, value=value,
+                                            reference_points=reference_points_rebatch, spatial_shapes=spatial_shapes,
+                                            level_start_index=level_start_index) # .view(bs, self.num_cams, max_len, self.embed_dims)
+        # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
+        queries = queries.permute(1, 2, 0)
+
+        # # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
+        queries = queries.view(num_query, embed_dims, bs, num_cams)
+        queries = queries.mean(-1)
+
+        # (num_query, embed_dims, bs)-> (bs, num_query, embed_dims)
+        queries = queries.permute(2, 0, 1)
+
+        queries = self.output_proj(queries)
+
+        return self.dropout(queries) + inp_residual
+
 
 
 @ATTENTION.register_module()
@@ -142,7 +273,7 @@ class SpatialCrossAttention(BaseModule):
         for j in range(bs):
             for i, reference_points_per_img in enumerate(reference_points_cam):   
                 index_query_per_img = indexes[i]
-                queries_rebatch[j, i, :len(index_query_per_img)] = query[j, index_query_per_img]
+                queries_rebatch[j, i, :len(index_query_per_img)] = query[j, index_query_per_img]  # 取 query 需要的索引位置，添加到 queries_rebatch
                 reference_points_rebatch[j, i, :len(index_query_per_img)] = reference_points_per_img[j, index_query_per_img]
 
         num_cams, l, bs, embed_dims = key.shape

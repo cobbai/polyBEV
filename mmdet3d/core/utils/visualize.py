@@ -37,6 +37,7 @@ MAP_PALETTE = {
     "road_divider": (202, 178, 214),
     "lane_divider": (106, 61, 154),
     "divider": (106, 61, 154),
+    "other": (47, 79, 79)
 }
 
 

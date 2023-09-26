@@ -1,10 +1,71 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from typing import Any
 import mmcv
 import numpy as np
-
+from PIL import Image,ImageOps
 from mmdet3d.core.points import BasePoints, get_points_type
 from mmdet.datasets.builder import PIPELINES
 from mmdet.datasets.pipelines import LoadAnnotations, LoadImageFromFile
+import cv2
+
+
+@PIPELINES.register_module()
+class LoadMultiImageCustom(object):
+    def __init__(self, to_float32=False, color_type='unchanged', image_size=None, label_size=None, classes=None):
+        self.to_float32 = to_float32
+        self.color_type = color_type
+        self.image_size = image_size
+        self.label_size = label_size
+        self.classes = classes
+
+        self.kernal = np.ones((3, 3), np.uint8)
+
+    def __call__(self, results) -> Any:
+        filename = results['img_filename']
+
+        # img = [mmcv.imread(name).astype(np.float32) for name in filename]
+        # img = [ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0)) for name in filename]
+        img = []
+        for name in filename:
+            if name.split("/")[-2] == "30_30":
+                tmp = mmcv.impad(mmcv.imread(name, flag='grayscale'), padding=(50, 300, 50, 50), pad_val=0)
+            elif name.split("/")[-2] == "40_40":
+                img.append(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0), centering=(1, 0.5)))
+            elif name.split("/")[-2] == "40_45":
+                img.append(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0), centering=(0, 0.5)))
+            else:
+                # tmp = np.array(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0)))
+                tmp = mmcv.imread(name, flag='grayscale')
+            tmp[tmp == 3] = 255
+            tmp[tmp == 2] = 170
+            tmp[tmp == 1] = 85
+            tmp = cv2.dilate(tmp.astype("uint8"), self.kernal, iterations=1).astype(np.float32)
+            img.append(tmp)
+
+        results['filename'] = filename
+        results['img'] = img
+        # results["img_shape"] = img[0].size
+        # results["ori_shape"] = img[0].size
+        # # Set initial values for default meta_keys
+        # results["pad_shape"] = img[0].size
+        # results["scale_factor"] = 1.0
+
+        # results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
+        if self.label_size is not None:
+            # semantic_indices = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            semantic_indices = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
+            labels = np.zeros((len(self.classes), *self.label_size), dtype=np.long)
+            for k, name in enumerate(self.classes):
+                masks = semantic_indices == k + 1
+                labels[k, masks] = 1
+                # print(labels[1, masks].shape)
+            results["gt_masks_bev"] = labels
+        else:
+            label = np.array(Image.open(results["semantic_indices_file"]), dtype=np.long)
+            results["semantic_indices"] = cv2.dilate(label.astype("uint8"), self.kernal, iterations=1).astype("int64")
+            # results["semantic_indices"] = mmcv.imread(results["semantic_indices_file"], flag='grayscale')
+
+        return results
 
 
 @PIPELINES.register_module()

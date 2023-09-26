@@ -1,0 +1,428 @@
+dataset_type: CLDataset
+dataset_root: data/out_123/
+# gt_paste_stop_epoch: -1
+# reduce_beams: 32
+# load_dim: 5
+# use_dim: 5
+# load_augmented: null
+
+# point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+# voxel_size: [0.1, 0.1, 0.2]
+image_size: [416, 480]  # TODO: debug [256, 704]  [128, 352]
+
+augment2d:
+  resize: [[0.38, 0.55], [0.48, 0.48]]
+  rotate: [-5.4, 5.4]
+  gridmask:
+    prob: 0.0
+    fixed_prob: true
+
+# augment3d:
+#   scale: [0.9, 1.1]
+#   rotate: [-0.78539816, 0.78539816]
+#   translate: 0.5
+
+# object_classes:
+#   - car
+#   - truck
+#   - construction_vehicle
+#   - bus
+#   - trailer
+#   - barrier
+#   - motorcycle
+#   - bicycle
+#   - pedestrian
+#   - traffic_cone
+
+# map_classes:
+#   - drivable_area
+#   # - drivable_area*
+#   - ped_crossing
+#   - walkway
+#   - stop_line
+#   - carpark_area
+#   # - road_divider
+#   # - lane_divider
+#   - divider
+
+map_classes:
+  - background
+  - lane
+  - divider
+  - other
+
+input_modality:
+  use_lidar: false
+  use_camera: true
+  use_radar: false
+  use_map: false
+  use_external: false
+
+model:
+  type: BEVFusionLoc
+  encoders:
+    lidar: null
+    camera:
+      backbone:
+        type: SwinTransformer
+        embed_dims: 96
+        depths: [2, 2, 6, 2]
+        num_heads: [3, 6, 12, 24]
+        window_size: 7
+        mlp_ratio: 4
+        qkv_bias: true
+        qk_scale: null
+        drop_rate: 0.
+        attn_drop_rate: 0.
+        drop_path_rate: 0.3
+        patch_norm: true
+        out_indices: [1, 2, 3]
+        with_cp: false
+        convert_weights: true
+        init_cfg:
+          type: None  # Pretrained
+          checkpoint: https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth
+        # type: ResNet
+        # depth: 50
+        # num_stages: 4
+        # out_indices: [1, 2, 3]
+        # frozen_stages: 1
+        # norm_cfg:
+        #   type: BN2d
+        #   requires_grad: False
+        # norm_eval: True
+        # style: pytorch
+        # with_cp: False
+        # dcn:
+        #   type: DCNv2
+        #   deform_groups: 1
+        #   fallback_on_stride: False
+        # stage_with_dcn: [False, False, True, True]
+      neck:
+        type: GeneralizedLSSFPN
+        in_channels: [192, 384, 768]
+        out_channels: 256
+        start_level: 0
+        num_outs: 3
+        norm_cfg:
+          type: BN2d
+          requires_grad: true
+        act_cfg:
+          type: ReLU
+          inplace: true
+        upsample_cfg:
+          mode: bilinear
+          align_corners: false
+      vtransform: null
+  fuser:
+    type: ConvFuser
+    in_channels: [768]
+    out_channels: 256
+  decoder:
+    backbone:
+      type: GeneralizedResNet
+      in_channels: 256
+      blocks:
+        - [2, 160, 2]
+        - [2, 320, 2]
+        - [2, 640, 1]
+    neck:
+      type: LSSFPN
+      in_indices: [-1, 0]
+      in_channels: [640, 160]
+      out_channels: 256
+      scale_factor: 2
+  heads:
+    object: null
+    map:
+      type: BEVSegmentationHead
+      in_channels: 256
+      grid_transform:
+        input_scope: [[-51.2, 51.2, 0.68], [-51.2, 51.2, 0.68]]
+        output_scope: [[-35, 30, 0.1], [-20, 20, 0.1]]
+      classes: ${map_classes}
+      # loss: focal
+      loss: CrossEntropyLoss
+      seg_encoder:
+        type: SegEncode
+        inC: 256
+        outC: 4
+        scale_factor: ${(3.97, 4)}
+
+train_pipeline:
+  -
+    # type: LoadMultiViewImageFromFiles
+    type: LoadMultiImageCustom
+    to_float32: true
+    image_size: ${image_size}
+    # label_size: [650, 400]
+    classes: ${map_classes}
+  # -
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
+  # -
+  #   type: LoadPointsFromFile
+  #   coord_type: LIDAR
+  #   load_dim: ${load_dim}
+  #   use_dim: ${use_dim}
+  #   reduce_beams: ${reduce_beams}
+  #   load_augmented: ${load_augmented}
+  # -
+  #   type: LoadPointsFromMultiSweeps
+  #   sweeps_num: 9
+  #   load_dim: ${load_dim}
+  #   use_dim: ${use_dim}
+  #   reduce_beams: ${reduce_beams}
+  #   pad_empty_sweeps: true
+  #   remove_close: true
+  #   load_augmented: ${load_augmented}
+  # -
+  #   type: LoadAnnotations3D
+  #   with_bbox_3d: true
+  #   with_label_3d: true
+  #   with_attr_label: False
+  # -
+  #   type: ObjectPaste
+  #   stop_epoch: ${gt_paste_stop_epoch}
+  #   db_sampler:
+  #     dataset_root: ${dataset_root}
+  #     info_path: ${dataset_root + "nuscenes_dbinfos_train.pkl"}
+  #     rate: 1.0
+  #     prepare: 
+  #       filter_by_difficulty: [-1]
+  #       filter_by_min_points:
+  #         car: 5
+  #         truck: 5
+  #         bus: 5
+  #         trailer: 5
+  #         construction_vehicle: 5
+  #         traffic_cone: 5
+  #         barrier: 5
+  #         motorcycle: 5
+  #         bicycle: 5
+  #         pedestrian: 5
+  #     classes: ${object_classes}
+  #     sample_groups:
+  #       car: 2
+  #       truck: 3
+  #       construction_vehicle: 7
+  #       bus: 4
+  #       trailer: 6
+  #       barrier: 2
+  #       motorcycle: 6
+  #       bicycle: 6
+  #       pedestrian: 2
+  #       traffic_cone: 2
+  #     points_loader:
+  #       type: LoadPointsFromFile
+  #       coord_type: LIDAR
+  #       load_dim: ${load_dim}
+  #       use_dim: ${use_dim}
+  #       reduce_beams: ${reduce_beams}
+  # -
+  #   type: ImageAug3D
+  #   final_dim: ${image_size}
+  #   resize_lim: ${augment2d.resize[0]}
+  #   bot_pct_lim: [0.0, 0.0]
+  #   rot_lim: ${augment2d.rotate}
+  #   rand_flip: true
+  #   is_train: true
+  # -
+  #   type: GlobalRotScaleTrans
+  #   resize_lim: ${augment3d.scale}
+  #   rot_lim: ${augment3d.rotate}
+  #   trans_lim: ${augment3d.translate}
+  #   is_train: true
+  # -
+  #   type: LoadBEVSegmentation
+  #   dataset_root: ${dataset_root}
+  #   xbound: [-50.0, 50.0, 0.5]
+  #   ybound: [-50.0, 50.0, 0.5]
+  #   classes: ${map_classes}
+  # -
+  #   type: RandomFlip3D
+  # -
+  #   type: PointsRangeFilter
+  #   point_cloud_range: ${point_cloud_range}
+  # -
+  #   type: ObjectRangeFilter
+  #   point_cloud_range: ${point_cloud_range}
+  # -
+  #   type: ObjectNameFilter
+  #   classes: ${object_classes}
+  -
+    type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  - 
+    type: GridMask
+    use_h: true
+    use_w: true
+    max_epoch: ${max_epochs}
+    rotate: 1
+    offset: false
+    ratio: 0.5
+    mode: 1
+    prob: ${augment2d.gridmask.prob}
+    fixed_prob: ${augment2d.gridmask.fixed_prob}
+  # -
+  #   type: PointShuffle
+  -
+    type: DefaultFormatBundle3D
+    classes: None
+    with_gt: false
+    with_label: false
+  -
+    type: Collect3D
+    keys:
+      - img
+      - gt_masks_bev
+    meta_lis_keys:
+      - token
+      - sample_idx
+      - filename
+      - img_norm_cfg
+      - timestamp
+      - prev
+      - next
+
+
+test_pipeline:
+  -
+    # type: LoadMultiViewImageFromFiles
+    type: LoadMultiImageCustom
+    to_float32: true
+    image_size: ${image_size}
+    # label_size: [650, 400]
+    classes: ${map_classes}
+  # -
+  #   type: PadMultiViewImage
+  #   size: [480, 416]  # 32 的倍数
+  # -
+  #   type: LoadPointsFromFile
+  #   coord_type: LIDAR
+  #   load_dim: ${load_dim}
+  #   use_dim: ${use_dim}
+  #   reduce_beams: ${reduce_beams}
+  #   load_augmented: ${load_augmented}
+  # -
+  #   type: LoadPointsFromMultiSweeps
+  #   sweeps_num: 9
+  #   load_dim: ${load_dim}
+  #   use_dim: ${use_dim}
+  #   reduce_beams: ${reduce_beams}
+  #   pad_empty_sweeps: true
+  #   remove_close: true
+  #   load_augmented: ${load_augmented}
+  # -
+  #   type: LoadAnnotations3D
+  #   with_bbox_3d: true
+  #   with_label_3d: true
+  #   with_attr_label: False
+  # -
+  #   type: ImageAug3D
+  #   final_dim: ${image_size}
+  #   resize_lim: ${augment2d.resize[1]}
+  #   bot_pct_lim: [0.0, 0.0]
+  #   rot_lim: [0.0, 0.0]
+  #   rand_flip: false
+  #   is_train: false
+  # -
+  #   type: GlobalRotScaleTrans
+  #   resize_lim: [1.0, 1.0]
+  #   rot_lim: [0.0, 0.0]
+  #   trans_lim: 0.0
+  #   is_train: false
+  # -
+  #   type: LoadBEVSegmentation
+  #   dataset_root: ${dataset_root}
+  #   xbound: [-50.0, 50.0, 0.5]
+  #   ybound: [-50.0, 50.0, 0.5]
+  #   classes: ${map_classes}
+  # -
+  #   type: PointsRangeFilter
+  #   point_cloud_range: ${point_cloud_range}
+  -
+    type: ImageNormalize
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  -
+    type: DefaultFormatBundle3D
+    classes: None
+    with_gt: false
+    with_label: false
+  -
+    type: Collect3D
+    keys:
+      - img
+      - gt_masks_bev
+    meta_lis_keys:
+      - token
+      - sample_idx
+      - filename
+      - img_norm_cfg
+      - timestamp
+      - prev
+      - next
+
+
+data:
+  samples_per_gpu: 1
+  workers_per_gpu: 4
+  train:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "metas_train.pkl"}
+    pipeline: ${train_pipeline}
+    # object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: false
+    box_type_3d: LiDAR
+  val:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "metas_val.pkl"}
+    pipeline: ${test_pipeline}
+    # object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: false
+    box_type_3d: LiDAR
+  test:
+    type: ${dataset_type}
+    dataset_root: ${dataset_root}
+    ann_file: ${dataset_root + "metas_val.pkl"}
+    pipeline: ${test_pipeline}
+    # object_classes: ${object_classes}
+    map_classes: ${map_classes}
+    modality: ${input_modality}
+    test_mode: true
+    box_type_3d: LiDAR
+
+evaluation:
+  interval: 1
+  pipeline: ${test_pipeline}
+
+
+optimizer:
+  type: AdamW
+  lr: 1.0e-4
+  weight_decay: 0.01
+  paramwise_cfg:
+    custom_keys:
+      absolute_pos_embed:
+        decay_mult: 0
+      relative_position_bias_table:
+        decay_mult: 0
+
+optimizer_config:
+  grad_clip:
+    max_norm: 35
+    norm_type: 2
+
+lr_config:
+  policy: cyclic
+
+momentum_config:
+  policy: cyclic

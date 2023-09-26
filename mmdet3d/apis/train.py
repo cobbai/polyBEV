@@ -37,6 +37,7 @@ def train_model(
             cfg.data.samples_per_gpu,
             cfg.data.workers_per_gpu,
             1,
+            # shuffle=False,
             dist=distributed,
             seed=cfg.seed,
         )

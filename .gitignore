@@ -8,6 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+tmp/
 build/
 data/
 pretrained/
@@ -28,6 +29,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.pkl
 MANIFEST
 
 # PyInstaller

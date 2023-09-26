@@ -32,7 +32,7 @@ def show_seg(labels, car_img):
                [128, 0, 0], [64, 0, 128], [64, 0, 192], [192, 128, 64],
                [192, 192, 128], [64, 64, 128], [128, 0, 192], [192, 0, 64]]
     mask_colors = np.array(PALETTE)
-    img = np.zeros((200, 400, 3))
+    img = np.zeros((650, 400, 3))
 
     for index, mask_ in enumerate(labels):
         color_mask = mask_colors[index]
@@ -76,7 +76,7 @@ def main() -> None:
     parser.add_argument("--split", type=str, default="val", choices=["train", "val"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
     parser.add_argument("--bbox-score", type=float, default=None)
-    parser.add_argument("--map-score", type=float, default=0.5)
+    parser.add_argument("--map-score", type=float, default=0.25)
     parser.add_argument("--out-dir", type=str, default="viz")
     args, opts = parser.parse_known_args()
 
@@ -97,7 +97,7 @@ def main() -> None:
         dataset,
         samples_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=True,
+        dist=False,
         shuffle=False,
     )
 
@@ -120,18 +120,18 @@ def main() -> None:
                 broadcast_buffers=False,
             )
         else:
-            model = MMDataParallel(model.cuda(), device_ids=[0])
+            model = MMDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()])
         model.eval()
 
     for data in dataflow:
         if "metas" in data:
             metas = data["metas"].data[0][0]
             name = "{}-{}".format(metas["timestamp"], metas["token"])
-            lidar2image = metas["lidar2image"]
+            lidar2image = metas["lidar2image"] if "lidar2image" in metas else None
         else:
             metas = data["img_metas"][0].data[0][0]
-            name = metas["sample_idx"]
-            lidar2image = metas["lidar2img"]
+            name = metas["scene_token"]
+            lidar2image = metas["lidar2img"] if "lidar2img" in metas else None
 
         if args.mode == "pred":
             # 比 torch.no_grad() 有更好的性能
@@ -174,7 +174,7 @@ def main() -> None:
         elif args.mode == "pred" and "pts_bbox" in outputs[0] and outputs[0]["pts_bbox"] is not None:
             pass
 
-        if "img" in data:
+        if "img" in data and lidar2image is not None:
             for k, image_path in enumerate(metas["filename"]):
                 image = mmcv.imread(image_path)
                 visualize_camera(
@@ -221,7 +221,7 @@ def main() -> None:
         if "semantic_indices" in outputs[0] and outputs[0]["seg_preds"] is not None:
             semantic = outputs[0]['seg_preds']
             semantic = onehot_encoding(semantic).cpu().numpy()
-            fpath = os.path.join(args.out_dir, "semantic", name + ".png")
+            fpath = os.path.join(args.out_dir, "semantic", f"{name}.png")
             mmcv.mkdir_or_exist(os.path.dirname(fpath))
             mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
@@ -231,7 +231,7 @@ def main() -> None:
                 one_hot = target_semantic_indices.new_full(semantic.shape, 0)
                 one_hot.scatter_(1, target_semantic_indices, 1)
                 semantic = one_hot.cpu().numpy().astype(np.float)
-                fpath = os.path.join(args.out_dir, "semantic", name + "_gt.png")
+                fpath = os.path.join(args.out_dir, "semantic", f"{name}_gt.png")
                 mmcv.mkdir_or_exist(os.path.dirname(fpath))
                 mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
