@@ -21,11 +21,17 @@ map_grid_conf:
   zbound: [-10.0, 10.0, 20.0]
   dbound: [1.0, 60.0, 1.0]
 
+map_classes:
+  - background
+  - lane
+  - divider
+  - other
+
 grid_conf: ${map_grid_conf}
 bev_h_: 100
 bev_w_: 100
 bev_size: ${[bev_h_, bev_w_]}
-queue_length: 3
+queue_length: 1
 _dim_: 256
 _pos_dim_: ${_dim_ // 2}
 _ffn_dim_: ${_dim_ * 2}
@@ -50,6 +56,7 @@ model:
   video_test_mode: True
   img_backbone:
     type: ResNet
+    in_channels: 1
     depth: 50
     num_stages: 4
     out_indices: [1, 2, 3]
@@ -99,14 +106,14 @@ model:
       class_weight: [ 0.5, 2.0, 2.0, 2.0 ]
     transformer:
       type: PerceptionTransformer
-      num_cams: 3
+      num_cams: 2
       rotate_prev_bev: True
       use_shift: True
-      use_can_bus: True
+      use_can_bus: False
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
-        num_layers: 1
+        num_layers: 3
         pc_range: ${point_cloud_range}
         num_points_in_pillar: 4
         return_intermediate: False
@@ -167,7 +174,7 @@ train_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
-    image_size: [400, 450]  # [416, 480]
+    image_size: [400, 650]  # [416, 480]
   # -
   #   type: PadMultiViewImage
   #   size: [416, 480]  # 32 的倍数
@@ -189,10 +196,10 @@ test_pipeline:
   -
     type: LoadMultiImageCustom
     to_float32: true
-    image_size: [400, 450]
+    image_size: [400, 650]
   -
     type: MultiScaleFlipAug3D
-    img_scale: [400, 450]
+    img_scale: [400, 650]
     pts_scale_ratio: 1
     flip: False
     transforms:

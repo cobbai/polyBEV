@@ -94,9 +94,9 @@ def init_metas(dataset_root, metas_path):
 
             temp["img_filename"] = [
                 os.path.join(dataset_root, "images", "30_30", str(time) + "00000.png"),
-                os.path.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
-                os.path.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
-                # os.path.join(dataset_root, "images", "40_65", str(time) + "00000.png"),
+                # os.path.join(dataset_root, "images", "40_40", str(time) + "00000.png"),
+                # os.path.join(dataset_root, "images", "40_45", str(time) + "00000.png"),
+                os.path.join(dataset_root, "images", "40_65", str(time) + "00000.png"),
                 ]
             temp["semantic_indices_file"] = os.path.join(dataset_root, "label", "40_65", str(time) + "00000.png")
             result.append(temp)

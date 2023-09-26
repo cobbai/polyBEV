@@ -907,7 +907,7 @@ class ImageNormalize:
         self.compose = torchvision.transforms.Compose(
             [
                 torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(mean=mean, std=std),
+                # torchvision.transforms.Normalize(mean=mean, std=std),
             ]
         )
 

@@ -184,8 +184,26 @@ class BEVFormerEncoder(TransformerLayerSequence):
             bev_h, bev_w, dim='2d', bs=bev_query.size(1), device=bev_query.device, dtype=bev_query.dtype) # TSA需要的是2d的采样点，在BEV上
 
         if self.dataset_type == "custom":
-            ref_3d = copy.deepcopy(ref_2d)  # .clone()
+            ref_3d_65 = copy.deepcopy(ref_2d)  # .clone()
+            ref_3d_30 = copy.deepcopy(ref_2d)  # .clone()
             
+            # 40_65
+            ref_3d_65[..., 0:1] = ref_3d_65[..., 0:1] * 400 -200
+            ref_3d_65[..., 0] /= 400
+            ref_3d_65[..., 1:2] = ref_3d_65[..., 1:2] * 650 -350
+            ref_3d_65[..., 1] /= 650
+
+            # 30_30
+            ref_3d_30[..., 0:1] = ref_3d_30[..., 0:1] * 400 -200
+            ref_3d_30[..., 1:2] = ref_3d_30[..., 1:2] * 650 -350
+            ref_3d_30[ref_3d_30[:, :, :, 0] < -150] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 0] > 150] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 1] > 0] = 0
+            ref_3d_30[ref_3d_30[:, :, :, 1] < -300] = 0
+            ref_3d_30[..., 0] /= 400
+            ref_3d_30[..., 1] /= 650
+            ref_3d = torch.stack([ref_3d_65[0], ref_3d_30[0]], dim=0)
+
             # ref_3d_zero = torch.zeros([ref_2d.size(0), ref_2d.size(1), 9, ref_2d.size(3)], device=ref_2d.device, dtype=ref_2d.dtype)
             # step_y = 0.1 / bev_h
             # step_x = 0.1 / bev_w
@@ -194,10 +212,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
             # ref_3d_zero[:, :, 2, :] = torch.tensor([step_x, -step_y])
             # ref_3d_zero[:, :, 3, :] = torch.tensor([-step_x, 0.0])
             # ref_3d_zero[:, :, 4, :] = torch.tensor([0.0, 0.0])
-            # ref_3d_zero[:, :, 5, :] = torch.tensor([step_x, 0.0])
-            # ref_3d_zero[:, :, 6, :] = torch.tensor([-step_x, step_y])
-            # ref_3d_zero[:, :, 7, :] = torch.tensor([0.0, step_y])
-            # ref_3d_zero[:, :, 8, :] = torch.tensor([step_x, step_y])
             # ref_3d = ref_3d_zero + ref_2d
 
             reference_points_cam, bev_mask = None, None
@@ -372,7 +386,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
             if layer == 'self_attn':
                 # from mmdet3d.utils.visualization import Visualizer
                 # visualizer = Visualizer()
-                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="self_attention")
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="7")
 
                 query = self.attentions[attn_index](
                     query,
@@ -391,7 +405,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 attn_index += 1
                 identity = query
 
-                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="self_attention_output")
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="8")
 
             elif layer == 'norm':
                 query = self.norms[norm_index](query)
@@ -401,7 +415,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
             elif layer == 'cross_attn':
                 # from mmdet3d.utils.visualization import Visualizer
                 # visualizer = Visualizer()
-                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="cross_attention")
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="9")
 
                 query = self.attentions[attn_index](
                     query,
@@ -421,7 +435,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 attn_index += 1
                 identity = query
 
-                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="cross_attention_output")
+                # visualizer(query[0].view(100, 100, 256).permute(2, 0, 1), win_name="10")
 
             elif layer == 'ffn':
                 query = self.ffns[ffn_index](

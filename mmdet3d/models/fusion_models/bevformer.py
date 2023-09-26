@@ -66,7 +66,7 @@ class BEVFormer(MVXTwoStageDetector):
             #     img_meta.update(input_shape=input_shape)
 
             if img.dim() == 5 and img.size(0) == 1:
-                img.squeeze_()
+                img.squeeze_(dim=0)  # img.squeeze_()
             elif img.dim() == 5 and img.size(0) > 1:
                 B, N, C, H, W = img.size()
                 img = img.reshape(B * N, C, H, W)
@@ -77,10 +77,10 @@ class BEVFormer(MVXTwoStageDetector):
             
             # from mmdet3d.utils.visualization import Visualizer
             # visualizer = Visualizer()
-            # visualizer(img[-1], win_name="imgn")
-            # visualizer(img_feats[0][0], win_name="backbone[0][0]")
-            # visualizer(img_feats[1][0], win_name="backbone[1][0]")
-            # visualizer(img_feats[2][0], win_name="backbone[2][0]")
+            # visualizer(img[0], win_name="imgn")
+            # visualizer(img_feats[0][0], win_name="0")
+            # visualizer(img_feats[1][0], win_name="1")
+            # visualizer(img_feats[2][0], win_name="2")
 
             if isinstance(img_feats, dict):
                 img_feats = list(img_feats.values())
@@ -88,6 +88,11 @@ class BEVFormer(MVXTwoStageDetector):
             return None
         if self.with_img_neck:
             img_feats = self.img_neck(img_feats)
+        
+        # visualizer(img_feats[0][0], win_name="3")
+        # visualizer(img_feats[1][0], win_name="4")
+        # visualizer(img_feats[2][0], win_name="5")
+        # visualizer(img_feats[3][0], win_name="6")
 
         img_feats_reshaped = []
         for img_feat in img_feats:

@@ -122,8 +122,8 @@ class CustomCrossAttention(BaseModule):
         # queries_rebatch = queries_rebatch.view(bs*num_cams, max_len, self.embed_dims)
         # reference_points_rebatch = reference_points_rebatch.view(bs*num_cams, max_len, D, 2)
 
-        queries_rebatch =  torch.cat([query, query, query], 0)
-        reference_points_rebatch = torch.cat([reference_points, reference_points, reference_points], 0)
+        queries_rebatch =  torch.stack([query[0], query[0]], dim=0)
+        reference_points_rebatch = reference_points
 
         # query_mask = torch.zeros((queries_rebatch.size(0), int(queries_rebatch.size(1) ** 0.5), int(queries_rebatch.size(1) ** 0.5)), device=queries_rebatch.device).to(queries_rebatch.dtype)
         # query_pos = self.positional_encoding(query_mask).to(queries_rebatch.dtype)
