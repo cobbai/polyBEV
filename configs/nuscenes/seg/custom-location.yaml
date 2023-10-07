@@ -1,5 +1,6 @@
 
-point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+# point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+point_cloud_range: [-20, -35, -5.0, 20, 30, 3.0]
 voxel_size: [0.2, 0.2, 8]
 
 input_modality:
@@ -14,6 +15,12 @@ det_grid_conf:
   ybound: [-51.2, 51.2, 0.68]
   zbound: [-10.0, 10.0, 20.0]
   dbound: [1.0, 60.0, 1.0]
+
+# det_grid_conf:
+#   xbound: [-20.0, 20.0, 0.1]
+#   ybound: [-35.0, 30.0, 0.1]
+#   zbound: [-10.0, 10.0, 20.0]
+#   dbound: [1.0, 60.0, 1.0]
 
 map_grid_conf:
   xbound: [-20.0, 20.0, 0.1]
@@ -31,7 +38,7 @@ grid_conf: ${map_grid_conf}
 bev_h_: 100
 bev_w_: 100
 bev_size: ${[bev_h_, bev_w_]}
-queue_length: 1
+queue_length: 3
 _dim_: 256
 _pos_dim_: ${_dim_ // 2}
 _ffn_dim_: ${_dim_ * 2}
@@ -108,8 +115,9 @@ model:
       type: PerceptionTransformer
       num_cams: 2
       rotate_prev_bev: True
+      rotate_center: ${(bev_h_ * 35 / 65, bev_w_ * 20 / 40)}
       use_shift: True
-      use_can_bus: False
+      use_can_bus: True
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
@@ -223,7 +231,7 @@ test_pipeline:
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 4
+  workers_per_gpu: 0
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -242,7 +250,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_train.pkl"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -256,7 +264,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_train.pkl"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}

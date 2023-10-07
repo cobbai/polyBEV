@@ -118,9 +118,11 @@ def init_metas(dataset_root, metas_path):
             result[i]["next"] = result[i+1]["scene_token"]
 
     result = result[800:1000]
+    # result = result[780:911] + result[1100:1350] + result[1500:1600] + result[1700:1760] + \
+    #          result[2200:2300] + result[3160:3220] + result[3475:3520] + result[3780:3860]
     datalen = len(result)
 
-    mmcv.dump(result, "data/out_123/metas_train.pkl")
+    mmcv.dump(result[:-int(datalen * 0.2)], "data/out_123/metas_train.pkl")
     mmcv.dump(result[-int(datalen * 0.2):], "data/out_123/metas_val.pkl")
 
     return result

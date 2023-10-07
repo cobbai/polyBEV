@@ -124,7 +124,7 @@ class CustomLocationDataset(Dataset):
                 return None
             self.pre_pipeline(input_dict)
             example = self.pipeline(input_dict)
-            queue.append(example)
+            queue.append(copy.deepcopy(example))
         return self.union2one(queue)
     
     def prepare_test_data(self, index):
@@ -183,7 +183,7 @@ class CustomLocationDataset(Dataset):
                 metas_map[i]['can_bus'][:3] = 0
                 metas_map[i]['can_bus'][-1] = 0
             else:
-                metas_map[i]['prev_bev_exists'] = False
+                metas_map[i]['prev_bev_exists'] = True
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] -= prev_pos
