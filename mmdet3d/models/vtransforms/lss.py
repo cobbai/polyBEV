@@ -64,8 +64,10 @@ class LSSTransform(BaseTransform):
 
         x = x.view(B * N, C, fH, fW)
 
-        x = self.depthnet(x)
-        depth = x[:, : self.D].softmax(dim=1)
+        x = self.depthnet(x)  # [6, 256, 16, 44] --> [6, 198, 16, 44]
+        depth = x[:, : self.D].softmax(dim=1)  # [6, 118, 16, 44]
+
+        # [6, 1, 118, 16, 44] * [6, 80, 1, 16, 44]
         x = depth.unsqueeze(1) * x[:, self.D : (self.D + self.C)].unsqueeze(2)
 
         x = x.view(B, N, self.C, self.D, fH, fW)

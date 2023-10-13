@@ -83,7 +83,7 @@ def init_metas(dataset_root, metas_path):
 
             # can_bus
             can_bus = seg[1:]
-            rotation = Quaternion([can_bus[6]] + can_bus[3:6])
+            rotation = Quaternion(can_bus[3:7])
             can_bus[3:7] = rotation
             patch_angle = quaternion_yaw(rotation) / np.pi * 180
             if patch_angle < 0:
@@ -117,13 +117,13 @@ def init_metas(dataset_root, metas_path):
             result[i]["prev"] = result[i-1]["scene_token"]
             result[i]["next"] = result[i+1]["scene_token"]
 
-    result = result[800:1000]
-    # result = result[780:911] + result[1100:1350] + result[1500:1600] + result[1700:1760] + \
-    #          result[2200:2300] + result[3160:3220] + result[3475:3520] + result[3780:3860]
+    # result = result[800:1000]
+    result = result[850:891] + result[1300:1361] + result[2260:2301] + result[3790:3831] + \
+             result[6060:6101] + result[6570:6631] + result[7520:7561]
     datalen = len(result)
 
-    mmcv.dump(result[:-int(datalen * 0.2)], "data/out_123/metas_train.pkl")
-    mmcv.dump(result[-int(datalen * 0.2):], "data/out_123/metas_val.pkl")
+    mmcv.dump(result[:-int(datalen * 0.15)], "data/out_123/metas_train.pkl")
+    mmcv.dump(result[-int(datalen * 0.15):], "data/out_123/metas_val.pkl")
 
     return result
 

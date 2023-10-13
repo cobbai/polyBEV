@@ -36,9 +36,9 @@ class LoadMultiImageCustom(object):
             else:
                 # tmp = np.array(ImageOps.pad(Image.open(name).convert("RGB"), self.image_size, color=(0)))
                 tmp = mmcv.imread(name, flag='grayscale')
-            tmp[tmp == 3] = 255
-            tmp[tmp == 2] = 170
-            tmp[tmp == 1] = 85
+            # tmp[tmp == 3] = 255
+            # tmp[tmp == 2] = 170
+            # tmp[tmp == 1] = 85
             tmp = cv2.dilate(tmp.astype("uint8"), self.kernal, iterations=1).astype(np.float32)
             img.append(tmp)
 
