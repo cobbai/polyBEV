@@ -73,9 +73,9 @@ class CustomLocationDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
-            token=info["scene_token"],
+            token=info["token"],
             scene_token=info['scene_token'],
-            timestamp=info["scene_token"],
+            timestamp=info["token"],
             prev=info["prev"],
             next=info["next"],
             can_bus=info["can_bus"],
@@ -176,8 +176,25 @@ class CustomLocationDataset(Dataset):
         for i, each in enumerate(queue):
             metas_map[i] = each['img_metas'].data
             # first token
-            if metas_map[i]['prev'] == None or metas_map[i]['prev'] != prev_token:
+            # if metas_map[i]['prev'] == None or metas_map[i]['prev'] != prev_token:
+            #     metas_map[i]['prev_bev_exists'] = False
+            #     prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
+            #     prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
+            #     metas_map[i]['can_bus'][:3] = 0
+            #     metas_map[i]['can_bus'][-1] = 0
+            # else:
+            #     metas_map[i]['prev_bev_exists'] = True
+            #     tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
+            #     tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
+            #     metas_map[i]['can_bus'][:3] -= prev_pos
+            #     # metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
+            #     metas_map[i]['can_bus'][-1] -= prev_angle
+            #     prev_pos = copy.deepcopy(tmp_pos)
+            #     prev_angle = copy.deepcopy(tmp_angle)
+            # prev_token = metas_map[i]['scene_token']
+            if metas_map[i]['scene_token'] != prev_token:
                 metas_map[i]['prev_bev_exists'] = False
+                prev_token = metas_map[i]['scene_token']
                 prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] = 0
@@ -187,11 +204,9 @@ class CustomLocationDataset(Dataset):
                 tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
                 tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
                 metas_map[i]['can_bus'][:3] -= prev_pos
-                # metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
                 metas_map[i]['can_bus'][-1] -= prev_angle
                 prev_pos = copy.deepcopy(tmp_pos)
                 prev_angle = copy.deepcopy(tmp_angle)
-            prev_token = metas_map[i]['scene_token']
 
         queue[-1]['img_metas'] = DC(metas_map, cpu_only=True)
         queue[-1]['img'] = DC(torch.stack(imgs_list), cpu_only=False, stack=True)
@@ -346,9 +361,9 @@ class CLDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
-            token=info["scene_token"],
+            token=info["token"],
             sample_idx=info['scene_token'],
-            timestamp=info["scene_token"],
+            timestamp=info["token"],
             prev=info["prev"],
             next=info["next"],
             semantic_indices_file=info["semantic_indices_file"],

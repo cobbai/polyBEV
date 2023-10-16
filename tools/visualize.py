@@ -130,7 +130,7 @@ def main() -> None:
             lidar2image = metas["lidar2image"] if "lidar2image" in metas else None
         else:
             metas = data["img_metas"][0].data[0][0]
-            name = metas["scene_token"]
+            name = metas["token"]
             lidar2image = metas["lidar2img"] if "lidar2img" in metas else None
 
         if args.mode == "pred":

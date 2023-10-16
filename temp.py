@@ -88,8 +88,8 @@ def init_metas(dataset_root, metas_path):
             patch_angle = quaternion_yaw(rotation) / np.pi * 180
             if patch_angle < 0:
                 patch_angle += 360
-            can_bus[-2] = patch_angle / 180 * np.pi
-            can_bus[-1] = patch_angle
+            can_bus[-2] = patch_angle / 180 * np.pi  # 弧度
+            can_bus[-1] = patch_angle  # 角度
             temp["can_bus"] = np.array(can_bus)
 
             temp["img_filename"] = [
@@ -118,8 +118,17 @@ def init_metas(dataset_root, metas_path):
             result[i]["next"] = result[i+1]["scene_token"]
 
     # result = result[800:1000]
-    result = result[850:891] + result[1300:1361] + result[2260:2301] + result[3790:3831] + \
-             result[6060:6101] + result[6570:6631] + result[7520:7561]
+    e_num = [[850, 891], [1300, 1361], [2260, 2301], [3790, 3831], [6060, 6101], [6570, 6631], [7520, 7561]]
+    e_num = {"token_" + str(k):v for k, v in enumerate(e_num)}
+    ans = []
+    for token, idx in e_num.items():
+        for meta in result[idx[0]: idx[1]]:
+            meta["token"] = meta["scene_token"]
+            meta["scene_token"] = token
+            ans.append(meta)
+    # result = result[850:891] + result[1300:1361] + result[2260:2301] + result[3790:3831] + \
+    #          result[6060:6101] + result[6570:6631] + result[7520:7561]
+    result = ans
     datalen = len(result)
 
     mmcv.dump(result[:-int(datalen * 0.15)], "data/out_123/metas_train.pkl")

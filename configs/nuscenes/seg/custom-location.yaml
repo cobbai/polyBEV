@@ -110,12 +110,12 @@ model:
       type: CrossEntropyLoss
       use_sigmoid: False
       loss_weight: 3.0
-      class_weight: [ 0.5, 2.0, 2.0, 2.0 ]
+      class_weight: [0.1, 10, 10, 10] # [ 0.5, 2.0, 2.0, 2.0 ]
     transformer:
       type: PerceptionTransformer
       num_cams: 2
       rotate_prev_bev: True
-      # rotate_center: ${(bev_h_ * 35 / 65, bev_w_ * 20 / 40)}
+      rotate_center: ${(bev_h_ * 35 / 65, bev_w_ * 20 / 40)}
       use_shift: True
       use_can_bus: True
       embed_dims: ${_dim_}
@@ -125,7 +125,7 @@ model:
         pc_range: ${point_cloud_range}
         num_points_in_pillar: 4
         return_intermediate: False
-        dataset_type: "custom"  # 取消空间3D采样
+        dataset_type: "custom"
         transformerlayers:
           type: BEVFormerLayer
           attn_cfgs: ${[TemporalSelfAttention, CustomCrossAttention]}
@@ -198,7 +198,7 @@ train_pipeline:
   -
     type: CustomCollect3D
     keys: ['img', 'semantic_indices']
-    meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
+    meta_keys: ["scene_token", "filename", "img_norm_cfg", "token", "prev", "next", "can_bus"]
 
 test_pipeline:
   -
@@ -226,7 +226,7 @@ test_pipeline:
       -
         type: CustomCollect3D
         keys: ['img', 'semantic_indices']
-        meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
+        meta_keys: ["scene_token", "filename", "img_norm_cfg", "token", "prev", "next", "can_bus"]
       
 
 data:

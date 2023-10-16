@@ -147,8 +147,8 @@ class PerceptionTransformer(BaseModule):
             grid_length_x = grid_length[1]
             translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
             translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180  # 
-            bev_angle = ego_angle - translation_angle  # 车辆移动产生的转动角度??
-            # 特征图shift: 真实移动距离 / 特征图上像素格对应的真实大小 / 特征图像素大小
+            bev_angle = ego_angle - translation_angle  # 车辆移动产生的转动角度
+            # 自车角度shift，特征图像素移动距离
             shift_y = translation_length * \
                 np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h
             shift_x = translation_length * \
