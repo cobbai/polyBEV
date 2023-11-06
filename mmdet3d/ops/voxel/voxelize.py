@@ -52,11 +52,6 @@ class _Voxelization(Function):
             voxels = points.new_zeros(size=(max_voxels, max_points, points.size(1)))
             coors = points.new_zeros(size=(max_voxels, 3), dtype=torch.int)
             num_points_per_voxel = points.new_zeros(size=(max_voxels,), dtype=torch.int)
-            # hard_voxelize_gpu(): 
-            # voxel_num：每帧保留的体素数量
-            # num_points_per_voxel_out：每个体素保留的点数
-            # coors_out：体素位置索引，(xyz)
-            # voxels_out：每个体素保留点的具体特征值（点数与voxel_num对应）
             voxel_num = hard_voxelize(
                 points,
                 voxels,

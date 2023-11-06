@@ -12,6 +12,8 @@ from torchpack import distributed as dist
 from torchpack.utils.config import configs
 # from torchpack.utils.tqdm import tqdm
 import cv2
+import sys
+sys.path.insert(0, "/tmp/algorithm")
 
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
@@ -41,11 +43,11 @@ def show_seg(labels, car_img):
 
     # 这里需要水平翻转，因为这样才可以保证与在图像坐标系下，与习惯相同
 
-    img = np.flip(img, axis=0)
+    # img = np.flip(img, axis=0)
     # 可视化小车
-    car_img = np.where(car_img == [0, 0, 0], [255, 255, 255], car_img)[16: 84, 5:, :]
-    car_img = cv2.resize(car_img.astype(np.uint8), (30, 16))
-    img[img.shape[0] // 2 - 8: img.shape[0] // 2 + 8, img.shape[1] // 2 - 15: img.shape[1] // 2 + 15, :] = car_img
+    car_img = np.where(car_img == [0, 0, 0], [255, 255, 255], car_img)
+    car_img = cv2.resize(car_img.astype(np.uint8), (16, 26))
+    img[300 - 13: 300 + 13, img.shape[1] // 2 - 8: img.shape[1] // 2 + 8, :] = car_img
 
     return img
 
@@ -130,7 +132,7 @@ def main() -> None:
             lidar2image = metas["lidar2image"] if "lidar2image" in metas else None
         else:
             metas = data["img_metas"][0].data[0][0]
-            name = metas["token"]
+            name = metas["scene_token"]
             lidar2image = metas["lidar2img"] if "lidar2img" in metas else None
 
         if args.mode == "pred":
@@ -186,7 +188,7 @@ def main() -> None:
                     classes=cfg.object_classes,
                 )
 
-        if "points" in data:
+        if "points" in data and lidar2image is not None:
             lidar = data["points"].data[0][0].numpy()
             visualize_lidar(
                 os.path.join(args.out_dir, "lidar", f"{name}.png"),

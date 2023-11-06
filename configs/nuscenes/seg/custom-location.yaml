@@ -1,7 +1,7 @@
 
 # point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 point_cloud_range: [-20, -35, -5.0, 20, 30, 3.0]
-voxel_size: [0.2, 0.2, 8]
+voxel_size: [0.1, 0.1, 8]
 
 input_modality:
   use_lidar: false
@@ -15,12 +15,6 @@ det_grid_conf:
   ybound: [-51.2, 51.2, 0.68]
   zbound: [-10.0, 10.0, 20.0]
   dbound: [1.0, 60.0, 1.0]
-
-# det_grid_conf:
-#   xbound: [-20.0, 20.0, 0.1]
-#   ybound: [-35.0, 30.0, 0.1]
-#   zbound: [-10.0, 10.0, 20.0]
-#   dbound: [1.0, 60.0, 1.0]
 
 map_grid_conf:
   xbound: [-20.0, 20.0, 0.1]
@@ -38,7 +32,7 @@ grid_conf: ${map_grid_conf}
 bev_h_: 100
 bev_w_: 100
 bev_size: ${[bev_h_, bev_w_]}
-queue_length: 3
+queue_length: 1
 _dim_: 256
 _pos_dim_: ${_dim_ // 2}
 _ffn_dim_: ${_dim_ * 2}
@@ -99,6 +93,7 @@ model:
     task:
       seg: True
       det: False
+      lidar: False
     det_grid_conf: ${det_grid_conf}
     map_grid_conf: ${map_grid_conf}
     seg_encoder:
@@ -110,22 +105,22 @@ model:
       type: CrossEntropyLoss
       use_sigmoid: False
       loss_weight: 3.0
-      class_weight: [0.1, 10, 10, 10] # [ 0.5, 2.0, 2.0, 2.0 ]
+      class_weight: [ 0.5, 2.0, 2.0, 2.0 ]
     transformer:
       type: PerceptionTransformer
       num_cams: 2
       rotate_prev_bev: True
-      rotate_center: ${(bev_h_ * 35 / 65, bev_w_ * 20 / 40)}
+      # rotate_center: ${(bev_h_ // 2, bev_w_ // 2)}
       use_shift: True
-      use_can_bus: True
+      use_can_bus: False
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
-        num_layers: 3
+        num_layers: 6
         pc_range: ${point_cloud_range}
         num_points_in_pillar: 4
         return_intermediate: False
-        dataset_type: "custom"
+        dataset_type: "custom"  # 取消空间3D采样
         transformerlayers:
           type: BEVFormerLayer
           attn_cfgs: ${[TemporalSelfAttention, CustomCrossAttention]}
@@ -156,6 +151,56 @@ model:
     loss_iou:
       type: GIoULoss
       loss_weight: 0.0
+    pts_backbone:
+      type: SparseEncoder
+      in_channels: 4
+      sparse_shape: [400, 650, 41]  # [1024, 1024, 41]
+      output_channels: 128
+      order:
+        - conv
+        - norm
+        - act
+      encoder_channels:
+        - [16, 16, 32]
+        - [32, 32, 64]
+        - [64, 64, 128]
+        - [128, 128]
+      encoder_paddings:
+        - [0, 0, 1]
+        - [0, 0, 1]
+        - [0, 0, [1, 1, 0]]
+        - [0, 0]
+      block_type: basicblock
+    fuser:
+      type: ConvFuser
+      in_channels: [256, 256]
+      out_channels: 256
+    backbone:
+      type: SECOND
+      in_channels: 256
+      out_channels: [128, 256]
+      layer_nums: [5, 5]
+      layer_strides: [1, 2]
+      norm_cfg:
+        type: BN
+        eps: 1.0e-3
+        momentum: 0.01
+      conv_cfg:
+        type: Conv2d
+        bias: false
+    neck:
+      type: SECONDFPN
+      in_channels: [128, 256]
+      out_channels: [256, 256]
+      upsample_strides: [1, 2]
+      norm_cfg:
+        type: BN
+        eps: 1.0e-3
+        momentum: 0.01
+      upsample_cfg:
+        type: deconv
+        bias: false
+      use_conv_for_no_stride: true
   train_cfg:
     pts:
       grid_size: [512, 512, 1]
@@ -197,8 +242,8 @@ train_pipeline:
     with_label: false
   -
     type: CustomCollect3D
-    keys: ['img', 'semantic_indices']
-    meta_keys: ["scene_token", "filename", "img_norm_cfg", "token", "prev", "next", "can_bus"]
+    keys: ['img', 'semantic_indices', "points"]
+    meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
 
 test_pipeline:
   -
@@ -225,13 +270,13 @@ test_pipeline:
         with_label: false
       -
         type: CustomCollect3D
-        keys: ['img', 'semantic_indices']
-        meta_keys: ["scene_token", "filename", "img_norm_cfg", "token", "prev", "next", "can_bus"]
+        keys: ['img', 'semantic_indices', "points"]
+        meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
       
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 0
+  workers_per_gpu: 4
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -300,7 +345,7 @@ evaluation:
   interval: 1
   pipeline: ${test_pipeline}
 
-total_epochs: 24
+total_epochs: 50
 # load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
 runner:
   type: EpochBasedRunner

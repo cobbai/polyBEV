@@ -60,11 +60,11 @@ class CustomCrossAttention(BaseModule):
         self.output_proj = nn.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
 
-        # self.positional_encoding = build_positional_encoding(
-        #     dict(type='SinePositionalEncoding',
-        #         num_feats=128,
-        #         normalize=True)
-        # )
+        self.positional_encoding = build_positional_encoding(
+            dict(type='SinePositionalEncoding',
+                num_feats=128,
+                normalize=True)
+        )
 
         self.init_weight()
 
@@ -123,7 +123,7 @@ class CustomCrossAttention(BaseModule):
         # reference_points_rebatch = reference_points_rebatch.view(bs*num_cams, max_len, D, 2)
 
         queries_rebatch =  torch.stack([query[0], query[0]], dim=0)
-        reference_points_rebatch = reference_points
+        reference_points_rebatch = torch.stack([reference_points[0], reference_points[0]], dim=0)
 
         # query_mask = torch.zeros((queries_rebatch.size(0), int(queries_rebatch.size(1) ** 0.5), int(queries_rebatch.size(1) ** 0.5)), device=queries_rebatch.device).to(queries_rebatch.dtype)
         # query_pos = self.positional_encoding(query_mask).to(queries_rebatch.dtype)

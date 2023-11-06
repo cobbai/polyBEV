@@ -252,9 +252,6 @@ class BEVFusion(Base3DFusionModel):
 
         if self.fuser is not None:
             x = self.fuser(features)
-            # from mmdet3d.utils.visualization import Visualizer
-            # visualizer = Visualizer()
-            # visualizer(features[0][0], win_name="features[0]")
         else:
             assert len(features) == 1, features
             x = features[0]

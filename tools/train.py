@@ -2,6 +2,8 @@ import argparse
 import os
 import random
 import time
+import sys
+sys.path.insert(0, "/tmp/algorithm")
 
 import numpy as np
 import torch

@@ -136,19 +136,17 @@ class PerceptionTransformer(BaseModule):
 
         # obtain rotation angle and shift with ego motion
         if self.use_can_bus:
-            # 世界坐标 --> ego坐标??
             delta_x = np.array([each['can_bus'][0]
                             for each in kwargs['img_metas']])
             delta_y = np.array([each['can_bus'][1]
                             for each in kwargs['img_metas']])
             ego_angle = np.array(
                 [each['can_bus'][-2] / np.pi * 180 for each in kwargs['img_metas']])
-            grid_length_y = grid_length[0]  # pc_range 在特征图尺寸上每个像素的大小
+            grid_length_y = grid_length[0]
             grid_length_x = grid_length[1]
             translation_length = np.sqrt(delta_x ** 2 + delta_y ** 2)
-            translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180  # 
-            bev_angle = ego_angle - translation_angle  # 车辆移动产生的转动角度
-            # 自车角度shift，特征图像素移动距离
+            translation_angle = np.arctan2(delta_y, delta_x) / np.pi * 180
+            bev_angle = ego_angle - translation_angle
             shift_y = translation_length * \
                 np.cos(bev_angle / 180 * np.pi) / grid_length_y / bev_h
             shift_x = translation_length * \
@@ -170,7 +168,8 @@ class PerceptionTransformer(BaseModule):
                     tmp_prev_bev = prev_bev[:, i].reshape(
                         bev_h, bev_w, -1).permute(2, 0, 1)
                     tmp_prev_bev = rotate(tmp_prev_bev, rotation_angle,
-                                          center=self.rotate_center)
+                                        #   center=self.rotate_center
+                                          )
                     tmp_prev_bev = tmp_prev_bev.permute(1, 2, 0).reshape(
                         bev_h * bev_w, 1, -1)
                     prev_bev[:, i] = tmp_prev_bev[:, 0]

@@ -73,14 +73,15 @@ class CustomLocationDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
-            token=info["token"],
+            token=info["scene_token"],
             scene_token=info['scene_token'],
-            timestamp=info["token"],
+            timestamp=info["scene_token"],
             prev=info["prev"],
             next=info["next"],
             can_bus=info["can_bus"],
             semantic_indices_file=info["semantic_indices_file"],
-            img_filename=info["img_filename"]
+            img_filename=info["img_filename"],
+            points=info["points"],
         )
         
         return data
@@ -116,7 +117,7 @@ class CustomLocationDataset(Dataset):
         # random.shuffle(index_list) # 打乱
         # index_list = sorted(index_list[1:]) #三选2，增加不确定性
         # index_list.append(index) # 构成t-2， t-1， t的数据索引，-1为当前帧
-        index_list = [index - 1, index, index + 1]
+        index_list = [index - 1, index, index + 1] if self.queue_length != 1 else [index]
         for i in index_list:
             i = max(0, i) if i < self.__len__() else i - 1
             input_dict = self.get_data_info(i)
@@ -124,7 +125,7 @@ class CustomLocationDataset(Dataset):
                 return None
             self.pre_pipeline(input_dict)
             example = self.pipeline(input_dict)
-            queue.append(copy.deepcopy(example))
+            queue.append(example)
         return self.union2one(queue)
     
     def prepare_test_data(self, index):
@@ -136,7 +137,7 @@ class CustomLocationDataset(Dataset):
         Returns:
             dict: Testing data dict of the corresponding index.
         """
-        input_dict = self.data_infos[index]
+        input_dict = self.get_data_info(index)
         self.pre_pipeline(input_dict)
         example = self.pipeline(input_dict)
         return example
@@ -176,22 +177,6 @@ class CustomLocationDataset(Dataset):
         for i, each in enumerate(queue):
             metas_map[i] = each['img_metas'].data
             # first token
-            # if metas_map[i]['prev'] == None or metas_map[i]['prev'] != prev_token:
-            #     metas_map[i]['prev_bev_exists'] = False
-            #     prev_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-            #     prev_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-            #     metas_map[i]['can_bus'][:3] = 0
-            #     metas_map[i]['can_bus'][-1] = 0
-            # else:
-            #     metas_map[i]['prev_bev_exists'] = True
-            #     tmp_pos = copy.deepcopy(metas_map[i]['can_bus'][:3])
-            #     tmp_angle = copy.deepcopy(metas_map[i]['can_bus'][-1])
-            #     metas_map[i]['can_bus'][:3] -= prev_pos
-            #     # metas_map[i]['can_bus'][:3] = np.abs(metas_map[i]['can_bus'][:3])
-            #     metas_map[i]['can_bus'][-1] -= prev_angle
-            #     prev_pos = copy.deepcopy(tmp_pos)
-            #     prev_angle = copy.deepcopy(tmp_angle)
-            # prev_token = metas_map[i]['scene_token']
             if metas_map[i]['scene_token'] != prev_token:
                 metas_map[i]['prev_bev_exists'] = False
                 prev_token = metas_map[i]['scene_token']
@@ -361,9 +346,9 @@ class CLDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
-            token=info["token"],
+            token=info["scene_token"],
             sample_idx=info['scene_token'],
-            timestamp=info["token"],
+            timestamp=info["scene_token"],
             prev=info["prev"],
             next=info["next"],
             semantic_indices_file=info["semantic_indices_file"],

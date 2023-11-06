@@ -113,6 +113,7 @@ class SparseEncoder(nn.Module):
         input_sp_tensor = spconv.SparseConvTensor(
             voxel_features, coors, self.sparse_shape, batch_size
         )
+        # self.conv_input.to(device=torch.device("cuda:0"))
         x = self.conv_input(input_sp_tensor)
 
         encode_features = []

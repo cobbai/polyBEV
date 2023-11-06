@@ -77,7 +77,7 @@ class BEVFormer(MVXTwoStageDetector):
             
             # from mmdet3d.utils.visualization import Visualizer
             # visualizer = Visualizer()
-            # visualizer(img[0], win_name="imgn")
+            # visualizer(img[-1], win_name="imgn")
             # visualizer(img_feats[0][0], win_name="0")
             # visualizer(img_feats[1][0], win_name="1")
             # visualizer(img_feats[2][0], win_name="2")
@@ -119,7 +119,8 @@ class BEVFormer(MVXTwoStageDetector):
                           semantic_indices,
                           img_metas,
                           gt_bboxes_ignore=None,
-                          prev_bev=None):
+                          prev_bev=None,
+                          points=None):
         """Forward function'
         Args:
             pts_feats (list[torch.Tensor]): Features of point cloud branch
@@ -136,7 +137,8 @@ class BEVFormer(MVXTwoStageDetector):
         """
 
         outs = self.pts_bbox_head(
-            pts_feats, img_metas, prev_bev)  #这里是一个整体，直接获得计算loss所需要的logits
+            pts_feats, img_metas, prev_bev, points=points)  #这里是一个整体，直接获得计算loss所需要的logits
+        
         # 1. single det task
         if 'seg_preds' not in outs.keys():
             det_loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
@@ -248,7 +250,7 @@ class BEVFormer(MVXTwoStageDetector):
         img = img[:, -1, ...] # 当前时刻图像
 
         prev_img_metas = copy.deepcopy(img_metas) # 这里没写好吧，但是影响不大
-        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) # 获取前3帧的bev特征
+        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) if len_queue > 1 else None # 获取前3帧的bev特征
 
         img_metas = [each[len_queue-1] for each in img_metas]
         if not img_metas[0]['prev_bev_exists']:
@@ -257,7 +259,7 @@ class BEVFormer(MVXTwoStageDetector):
         losses = dict()
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, semantic_indices,
-                                            img_metas, gt_bboxes_ignore, prev_bev)
+                                            img_metas, gt_bboxes_ignore, prev_bev, points)
 
         losses.update(losses_pts)
         return losses
@@ -298,9 +300,9 @@ class BEVFormer(MVXTwoStageDetector):
 
         return bbox_results
 
-    def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False):
+    def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False, points=None):
         """Test function"""
-        outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev)
+        outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev, points=points)
         # 1. single det task
         if 'seg_preds' not in outs.keys():
 
@@ -335,7 +337,7 @@ class BEVFormer(MVXTwoStageDetector):
 
         result_list = [dict() for i in range(len(img_metas))]
         new_prev_bev, seg_preds, bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, prev_bev, rescale=rescale)
+            img_feats, img_metas, prev_bev, rescale=rescale, points=[kwargs["points"][1][0]])
 
         # 三种模式
         #1. single det
