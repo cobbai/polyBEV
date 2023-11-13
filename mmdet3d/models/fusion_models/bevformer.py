@@ -174,6 +174,10 @@ class BEVFormer(MVXTwoStageDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
+        # 转onnx
+        if isinstance(return_loss, dict):
+            return self.forward_test(return_loss["img_metas"], return_loss["img"])
+
         if return_loss:
             return self.forward_train(**kwargs)
         else:
@@ -336,8 +340,9 @@ class BEVFormer(MVXTwoStageDetector):
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
 
         result_list = [dict() for i in range(len(img_metas))]
+        points = [kwargs["points"][1][0]] if "points" in kwargs else None
         new_prev_bev, seg_preds, bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, prev_bev, rescale=rescale, points=[kwargs["points"][1][0]])
+            img_feats, img_metas, prev_bev, rescale=rescale, points=points)
 
         # 三种模式
         #1. single det

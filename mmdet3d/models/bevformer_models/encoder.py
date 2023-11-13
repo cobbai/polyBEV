@@ -73,11 +73,17 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         # reference points on 2D bev plane, used in temporal self-attention (TSA).
         elif dim == '2d':
+            # ref_y, ref_x = torch.meshgrid(
+            #     torch.linspace(
+            #         0.5, H - 0.5, H, dtype=dtype, device=device),
+            #     torch.linspace(
+            #         0.5, W - 0.5, W, dtype=dtype, device=device)
+            # )
+
+            # onnx 不支持 torch.linspace
             ref_y, ref_x = torch.meshgrid(
-                torch.linspace(
-                    0.5, H - 0.5, H, dtype=dtype, device=device),
-                torch.linspace(
-                    0.5, W - 0.5, W, dtype=dtype, device=device)
+                torch.cat((torch.arange(0.5, H-0.5, (H-1)/(H-1), dtype=dtype, device=device), torch.tensor([H-0.5], dtype=dtype, device=device)),dim=0),
+                torch.cat((torch.arange(0.5, W-0.5, (W-1)/(W-1), dtype=dtype, device=device), torch.tensor([W-0.5], dtype=dtype, device=device)),dim=0)
             )
             ref_y = ref_y.reshape(-1)[None] / H
             ref_x = ref_x.reshape(-1)[None] / W

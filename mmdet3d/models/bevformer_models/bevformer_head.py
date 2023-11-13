@@ -17,6 +17,7 @@ from mmdet3d.models.builder import build_seg_encoder, build_backbone, build_neck
 # from mmdet.models.builder import build_loss
 from mmseg.models.builder import build_loss
 from mmdet3d.ops import Voxelization
+from mmcv.ops.point_sample import bilinear_grid_sample
 
 
 def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):
@@ -92,7 +93,11 @@ class BevFeatureSlicer(nn.Module):
             grid = self.map_grid.unsqueeze(0).type_as(
                 x).repeat(x.shape[0], 1, 1, 1)
 
-            return F.grid_sample(x, grid=grid, mode='bilinear', align_corners=True)
+            if x.is_cuda:
+                return F.grid_sample(x, grid=grid, mode='bilinear', align_corners=True)
+            else:
+                # onnx 不支持 F.grid_sample
+                return bilinear_grid_sample(x, grid, True)
 
 
 @HEADS.register_module()

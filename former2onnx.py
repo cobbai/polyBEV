@@ -24,13 +24,13 @@ def parse_args():
 def main():
     args = parse_args()
     # cfg = Config.fromfile(args.config)
-    # cfg.load_from = args.load_from
 
     configs.load(args.config, recursive=True)
     cfg = Config(recursive_eval(configs), filename=args.config)
+    cfg.load_from = args.load_from
 
     model = build_model(cfg.model)
-    model = model.cpu()
+    # model = model.cuda()  # Couldn't export Python operator MultiScaleDeformableAttnFunction_fp32
 
     # dummy data
     dataset = build_dataset(cfg.data.test)
@@ -43,30 +43,33 @@ def main():
     )
 
     for data in data_loader:
-        inputs = {}
-        inputs["img"] = data['img'][0].data[0]  # tensor (1, 2, 1, 650, 400)
-        inputs['img_metas'] = [1]
-        inputs['img_metas'][0] = [1]
-        inputs['img_metas'][0][0] = {}
-        inputs['img_metas'][0][0]['can_bus'] = torch.from_numpy(data['img_metas'][0].data[0][0]['can_bus'])
-        inputs['img_metas'][0][0]['scene_token'] = torch.from_numpy(data['img_metas'][0].data[0][0]['scene_token'])
-        inputs['img_metas'][0][0]['filename'] = torch.from_numpy(data['img_metas'][0].data[0][0]['filename'])
-        inputs['img_metas'][0][0]['img_norm_cfg'] = torch.from_numpy(data['img_metas'][0].data[0][0]['img_norm_cfg'])
-        inputs['img_metas'][0][0]['token'] = torch.from_numpy(data['img_metas'][0].data[0][0]['token'])
-        inputs['img_metas'][0][0]['prev'] = torch.from_numpy(data['img_metas'][0].data[0][0]['prev'])
-        inputs['img_metas'][0][0]['next'] = torch.from_numpy(data['img_metas'][0].data[0][0]['next'])
 
-        torch.onnx.export(model, inputs, cfg.load_from.split("/")[-1].split(".")[0] + '.onnx',
-                    export_params=True, opset_version=11,
-                    keep_initializers_as_inputs=True,
-                    do_constant_folding=False,
-                    verbose=False,
-                    # input_names = ['input'], output_names=["output"]
-                    )
+        with torch.no_grad():  # 不计算梯度，不反响传播
+            inputs = {}
+            inputs["img"] = [data['img'][0].data[0]]  # [ tensor (1, 2, 1, 650, 400) ]
+            inputs['img_metas'] = [1]
+            inputs['img_metas'][0] = [1]
+            inputs['img_metas'][0][0] = {}
+            inputs['img_metas'][0][0]['can_bus'] = torch.from_numpy(data['img_metas'][0].data[0][0]['can_bus'])
+            inputs['img_metas'][0][0]['scene_token'] = data['img_metas'][0].data[0][0]['scene_token']
+            inputs['img_metas'][0][0]['filename'] = data['img_metas'][0].data[0][0]['filename']
+            inputs['img_metas'][0][0]['img_norm_cfg'] = data['img_metas'][0].data[0][0]['img_norm_cfg']
+            inputs['img_metas'][0][0]['prev'] = data['img_metas'][0].data[0][0]['prev']
+            inputs['img_metas'][0][0]['next'] = data['img_metas'][0].data[0][0]['next']
 
-        break
+            torch.onnx.export(
+                model, 
+                inputs,  # inputs输入格式与模型test保持一致
+                cfg.load_from.split(".")[0] + '.onnx',
+                export_params=True, opset_version=11,
+                keep_initializers_as_inputs=True,
+                do_constant_folding=False,
+                verbose=False,
+                input_names=list(inputs.keys()),
+                output_names=["output"],
+                )
 
-    state_dict = torch.load(args.load_from, map_location='cpu')['net']
+            break
 
     return
 
