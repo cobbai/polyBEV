@@ -1,6 +1,7 @@
 
-point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
-voxel_size: [0.2, 0.2, 8]
+# point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
+point_cloud_range: [-20, -35, -5.0, 20, 30, 3.0]
+voxel_size: [0.1, 0.1, 8]
 
 input_modality:
   use_lidar: false
@@ -43,6 +44,7 @@ TemporalSelfAttention:
   num_levels: 1
 CustomCrossAttention:
   type: CustomCrossAttention
+  num_cams: 2
   embed_dims: ${_dim_}
   deformable_attention:
     type: MSDeformableAttention3D
@@ -68,7 +70,7 @@ model:
     style: pytorch
     with_cp: False
     dcn:
-      type: DCNv2
+      type: DCNv2  # DCNv2P
       deform_groups: 1
       fallback_on_stride: False
     stage_with_dcn: [False, False, True, True]
@@ -92,6 +94,7 @@ model:
     task:
       seg: True
       det: False
+      lidar: False
     det_grid_conf: ${det_grid_conf}
     map_grid_conf: ${map_grid_conf}
     seg_encoder:
@@ -108,12 +111,13 @@ model:
       type: PerceptionTransformer
       num_cams: 2
       rotate_prev_bev: True
-      use_shift: True
+      # rotate_center: ${(bev_h_ // 2, bev_w_ // 2)}
+      use_shift: False
       use_can_bus: False
       embed_dims: ${_dim_}
       encoder:
         type: BEVFormerEncoder
-        num_layers: 3
+        num_layers: 6
         pc_range: ${point_cloud_range}
         num_points_in_pillar: 4
         return_intermediate: False
@@ -148,6 +152,56 @@ model:
     loss_iou:
       type: GIoULoss
       loss_weight: 0.0
+    pts_backbone:
+      type: SparseEncoder
+      in_channels: 4
+      sparse_shape: [400, 650, 41]  # [1024, 1024, 41]
+      output_channels: 128
+      order:
+        - conv
+        - norm
+        - act
+      encoder_channels:
+        - [16, 16, 32]
+        - [32, 32, 64]
+        - [64, 64, 128]
+        - [128, 128]
+      encoder_paddings:
+        - [0, 0, 1]
+        - [0, 0, 1]
+        - [0, 0, [1, 1, 0]]
+        - [0, 0]
+      block_type: basicblock
+    fuser:
+      type: ConvFuser
+      in_channels: [256, 256]
+      out_channels: 256
+    backbone:
+      type: SECOND
+      in_channels: 256
+      out_channels: [128, 256]
+      layer_nums: [5, 5]
+      layer_strides: [1, 2]
+      norm_cfg:
+        type: BN
+        eps: 1.0e-3
+        momentum: 0.01
+      conv_cfg:
+        type: Conv2d
+        bias: false
+    neck:
+      type: SECONDFPN
+      in_channels: [128, 256]
+      out_channels: [256, 256]
+      upsample_strides: [1, 2]
+      norm_cfg:
+        type: BN
+        eps: 1.0e-3
+        momentum: 0.01
+      upsample_cfg:
+        type: deconv
+        bias: false
+      use_conv_for_no_stride: true
   train_cfg:
     pts:
       grid_size: [512, 512, 1]
@@ -223,7 +277,7 @@ test_pipeline:
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 4
+  workers_per_gpu: 0
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -242,7 +296,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_train.pkl"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
@@ -256,7 +310,7 @@ data:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
     grid_conf: ${grid_conf}
-    ann_file: ${dataset_root + "metas_train.pkl"}
+    ann_file: ${dataset_root + "metas_val.pkl"}
     pipeline: ${test_pipeline}
     object_classes: ${object_classes}
     map_classes: ${map_classes}

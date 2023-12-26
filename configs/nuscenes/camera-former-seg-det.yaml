@@ -209,9 +209,9 @@ train_pipeline:
     mean: [103.530, 116.280, 123.675]
     std: [1.0, 1.0, 1.0]
     to_rgb: False
-  -
-    type: RandomScaleImageMultiViewImage
-    scales: [0.2]
+  # -
+  #   type: RandomScaleImageMultiViewImage
+  #   scales: [0.2]
   -
     type: PadMultiViewImage
     size_divisor: 32
@@ -245,7 +245,7 @@ test_pipeline:
     transforms:
       -
         type: RandomScaleImageMultiViewImage
-        scales: [ 0.2 ]
+        scales: [ 1 ]
       -
         type: DefaultFormatBundle3D_2
         class_names: ${object_classes}
@@ -256,7 +256,7 @@ test_pipeline:
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 4
+  workers_per_gpu: 0
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}

@@ -38,6 +38,9 @@ RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ setuptools==59.5.0
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ networkx==2.2
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ trimesh==2.35.39
 RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ torchmetrics==0.3.2
+# RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ onnx==1.12.0
+# RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ onnxruntime==1.10.0
+# RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ onnx-simplifier
 
 RUN apt-get update
 RUN apt-get install -y vim

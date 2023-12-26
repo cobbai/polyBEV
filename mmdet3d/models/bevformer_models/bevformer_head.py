@@ -13,9 +13,11 @@ from mmdet3d.core.bbox.coders import build_bbox_coder
 from mmdet3d.core.bbox.util import normalize_bbox
 from mmcv.runner import force_fp32, auto_fp16
 # from ..modules.builder import build_seg_encoder
-from mmdet3d.models.builder import build_seg_encoder
+from mmdet3d.models.builder import build_seg_encoder, build_backbone, build_neck, build_fuser
 # from mmdet.models.builder import build_loss
 from mmseg.models.builder import build_loss
+from mmdet3d.ops import Voxelization
+from mmcv.ops.point_sample import bilinear_grid_sample
 
 
 def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):
@@ -44,40 +46,37 @@ def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):
 
 class BevFeatureSlicer(nn.Module):
     # crop the interested area in BEV feature for semantic map segmentation
-    def __init__(self, grid_conf, map_grid_conf):
+    def __init__(self, map_grid_conf):
         super().__init__()
 
-        if grid_conf == map_grid_conf:
-            self.identity_mapping = True
-        else:
-            self.identity_mapping = False
+        self.identity_mapping = False
 
-            bev_resolution, bev_start_position, bev_dimension = calculate_birds_eye_view_parameters(
-                grid_conf['xbound'], grid_conf['ybound'], grid_conf['zbound'],
-            )
+        map_bev_resolution, map_bev_start_position, map_bev_dimension = calculate_birds_eye_view_parameters(
+            map_grid_conf['xbound'], map_grid_conf['ybound'], map_grid_conf['zbound'],
+        )
 
-            map_bev_resolution, map_bev_start_position, map_bev_dimension = calculate_birds_eye_view_parameters(
-                map_grid_conf['xbound'], map_grid_conf['ybound'], map_grid_conf['zbound'],
-            )
+        self.map_x = torch.arange(
+            map_bev_start_position[0], map_grid_conf['xbound'][1], map_bev_resolution[0])
 
-            self.map_x = torch.arange(
-                map_bev_start_position[0], map_grid_conf['xbound'][1], map_bev_resolution[0])
+        self.map_y = torch.arange(
+            map_bev_start_position[1], map_grid_conf['ybound'][1], map_bev_resolution[1])
 
-            self.map_y = torch.arange(
-                map_bev_start_position[1], map_grid_conf['ybound'][1], map_bev_resolution[1])
+        # convert to normalized coords
+        # self.norm_map_x = self.map_x / (- bev_start_position[0])
+        # self.norm_map_y = self.map_y / (- bev_start_position[1])
 
-            # convert to normalized coords
-            self.norm_map_x = self.map_x / (- bev_start_position[0])
-            self.norm_map_y = self.map_y / (- bev_start_position[1])
-            # vision 1 失败
-            self.map_grid = torch.stack(torch.meshgrid(
-                self.norm_map_x, self.norm_map_y), dim=2).permute(1, 0, 2)
-            # self.map_grid = torch.stack(torch.meshgrid(
-            #     self.norm_map_x, self.norm_map_y, indexing='xy'), dim=2)
+        self.norm_map_x = (self.map_x - map_grid_conf["xbound"][0]) / (map_grid_conf["xbound"][1] - map_grid_conf["xbound"][0]) * 2 - 1
+        self.norm_map_y = (self.map_y - map_grid_conf["ybound"][0]) / (map_grid_conf["ybound"][1] - map_grid_conf["ybound"][0]) * 2 - 1
 
-             # vision 2 test
-            # self.map_grid = torch.stack(torch.meshgrid(
-            #     self.norm_map_x, self.norm_map_y), dim=2)
+        # vision 1 失败
+        self.map_grid = torch.stack(torch.meshgrid(
+            self.norm_map_x, self.norm_map_y), dim=2).permute(1, 0, 2)
+        # self.map_grid = torch.stack(torch.meshgrid(
+        #     self.norm_map_x, self.norm_map_y, indexing='xy'), dim=2)
+
+            # vision 2 test
+        # self.map_grid = torch.stack(torch.meshgrid(
+        #     self.norm_map_x, self.norm_map_y), dim=2)
 
     def forward(self, x):
         # x: bev feature map tensor of shape (b, c, h, w)
@@ -87,7 +86,11 @@ class BevFeatureSlicer(nn.Module):
             grid = self.map_grid.unsqueeze(0).type_as(
                 x).repeat(x.shape[0], 1, 1, 1)
 
-            return F.grid_sample(x, grid=grid, mode='bilinear', align_corners=True)
+            if x.is_cuda:
+                return F.grid_sample(x, grid=grid, mode='bilinear', align_corners=True)
+            else:
+                # onnx 不支持 F.grid_sample
+                return bilinear_grid_sample(x, grid, True)
 
 
 @HEADS.register_module()
@@ -151,13 +154,46 @@ class BEVFormerHead(DETRHead):
             *args, transformer=transformer, **kwargs)
         self.code_weights = nn.Parameter(torch.tensor(
             self.code_weights, requires_grad=False), requires_grad=False)
+        
         # 如果包含分割任务，则实例化分割子网络以及loss
         if self.task.get('seg'):
             self.map_grid_conf = map_grid_conf
             self.det_grid_conf = det_grid_conf
-            self.feat_cropper = BevFeatureSlicer(self.det_grid_conf, self.map_grid_conf)
+            self.feat_cropper = BevFeatureSlicer(self.map_grid_conf)
             self.seg_decoder = build_seg_encoder(seg_encoder)
             self.loss_seg = build_loss(loss_seg)
+
+        # 添加 lidar 点云任务
+        if self.task.get("lidar"):
+            self.lidar_encoder = nn.ModuleDict()
+            self.lidar_encoder["lidar"] = nn.ModuleDict(
+                        {
+                            "voxelize": Voxelization(
+                                max_num_points=10, 
+                                point_cloud_range=kwargs["train_cfg"]["point_cloud_range"], 
+                                voxel_size=kwargs["train_cfg"]["voxel_size"], 
+                                max_voxels=90000
+                                ),
+                            "pts_backbone": build_backbone(kwargs["pts_backbone"]),
+                        }
+                    )
+            
+            self.voxelize_reduce = True
+
+            self.fuser = build_fuser(kwargs["fuser"])
+            self.decoder = nn.ModuleDict(
+                {
+                    "backbone": build_backbone(kwargs["backbone"]),
+                    "neck": build_neck(kwargs["neck"]),
+                }
+            )
+
+            # self.conv = nn.Sequential(
+            #     nn.Conv2d(512, 256, kernel_size=3, padding=1, bias=False),
+            #     nn.BatchNorm2d(256),
+            #     nn.ReLU(inplace=True),
+            # )
+
 
     def _init_layers(self):
         """Initialize classification branch and regression branch of head."""
@@ -212,7 +248,7 @@ class BEVFormerHead(DETRHead):
                     nn.init.constant_(m[-1].bias, bias_init)
 
     @auto_fp16(apply_to=('mlvl_feats'))
-    def forward(self, mlvl_feats, img_metas, prev_bev=None,  only_bev=False):
+    def forward(self, mlvl_feats, img_metas, prev_bev=None, points=None,  only_bev=False):
         """Forward function.
         Args:
             mlvl_feats (tuple[Tensor]): Features from the upstream
@@ -229,14 +265,13 @@ class BEVFormerHead(DETRHead):
                 Shape [nb_dec, bs, num_query, 9].
         """
 
-        bs, num_cam, _, _, _ = mlvl_feats[0].shape
         dtype = mlvl_feats[0].dtype
-        object_query_embeds = self.query_embedding.weight.to(dtype)
-        bev_queries = self.bev_embedding.weight.to(dtype)
+        object_query_embeds = self.query_embedding.weight
+        bev_queries = self.bev_embedding.weight
 
-        bev_mask = torch.zeros((bs, self.bev_h, self.bev_w),
+        bev_mask = torch.zeros((1, self.bev_h, self.bev_w),
                                device=bev_queries.device).to(dtype)
-        bev_pos = self.positional_encoding(bev_mask).to(dtype)
+        bev_pos = self.positional_encoding(bev_mask)
 
         # PerceptionTransformer
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
@@ -291,8 +326,23 @@ class BEVFormerHead(DETRHead):
             #seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 1, 0)
             
             # TEST 02 转换HW维度，再竖直翻转 small_seg_trans_flip.py 都一样配置，只是区分了对其进行的操作。epoch3 40.3%miou
-            seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 1, 0)  # b, c , w, h
-            seg_bev = torch.flip(seg_bev, dims=[2])
+            # seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 1, 0)  # b, c , w, h
+            seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, 1, -1).permute(2, 3, 0, 1)
+
+            # if img_metas[0]["scene_token"] == 2912981.9:
+            #     print(img_metas[0]["scene_token"])
+
+            if self.task.get('lidar'):
+                # from mmdet3d.utils.visualization import Visualizer
+                # visualizer = Visualizer()
+                # visualizer(img[-1], win_name="imgn")
+                feats, coords, sizes = self.voxelize(points)
+                batch_size = coords[-1, 0] + 1
+                pts_outs = self.lidar_encoder["lidar"]["pts_backbone"](feats, coords, batch_size, sizes=sizes)
+                pts_outs = pts_outs.permute(0, 1, 3, 2).contiguous()
+                pts_outs = F.interpolate(pts_outs, size=(self.bev_h, self.bev_w), mode='bicubic', align_corners=False)
+                # fuser
+                seg_bev = self.fuser([seg_bev, pts_outs])
 
             # 测试下方向
             #seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 0, 1)
@@ -381,6 +431,36 @@ class BEVFormerHead(DETRHead):
             }
 
             return outs
+
+    @torch.no_grad()
+    @force_fp32()
+    def voxelize(self, points):
+        feats, coords, sizes = [], [], []
+        for k, res in enumerate(points):
+            ret = self.lidar_encoder["lidar"]["voxelize"](res)
+            if len(ret) == 3:
+                # hard voxelize
+                f, c, n = ret
+            else:
+                assert len(ret) == 2
+                f, c = ret
+                n = None
+            feats.append(f)
+            coords.append(F.pad(c, (1, 0), mode="constant", value=k))
+            if n is not None:
+                sizes.append(n)
+
+        feats = torch.cat(feats, dim=0)
+        coords = torch.cat(coords, dim=0)
+        if len(sizes) > 0:
+            sizes = torch.cat(sizes, dim=0)
+            if self.voxelize_reduce:
+                feats = feats.sum(dim=1, keepdim=False) / sizes.type_as(feats).view(
+                    -1, 1
+                )
+                feats = feats.contiguous()
+
+        return feats, coords, sizes
 
     def _get_target_single(self,
                            cls_score,

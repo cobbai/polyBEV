@@ -79,6 +79,12 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 torch.linspace(
                     0.5, W - 0.5, W, dtype=dtype, device=device)
             )
+
+            # onnx 不支持 torch.linspace
+            # ref_y, ref_x = torch.meshgrid(
+            #     torch.cat((torch.arange(0.5, H-0.5, (H-1)/(H-1), dtype=dtype, device=device), torch.tensor([H-0.5], dtype=dtype, device=device)),dim=0),
+            #     torch.cat((torch.arange(0.5, W-0.5, (W-1)/(W-1), dtype=dtype, device=device), torch.tensor([W-0.5], dtype=dtype, device=device)),dim=0)
+            # )
             ref_y = ref_y.reshape(-1)[None] / H
             ref_x = ref_x.reshape(-1)[None] / W
             ref_2d = torch.stack((ref_x, ref_y), -1)
@@ -184,8 +190,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
             bev_h, bev_w, dim='2d', bs=bev_query.size(1), device=bev_query.device, dtype=bev_query.dtype) # TSA需要的是2d的采样点，在BEV上
 
         if self.dataset_type == "custom":
-            ref_3d_65 = copy.deepcopy(ref_2d)  # .clone()
-            ref_3d_30 = copy.deepcopy(ref_2d)  # .clone()
+            ref_3d_65 = ref_2d.clone()# copy.deepcopy(ref_2d)  # .clone()
+            # ref_3d_30 = ref_2d.clone()#copy.deepcopy(ref_2d)  # .clone()
             
             # 40_65
             ref_3d_65[..., 0:1] = ref_3d_65[..., 0:1] * 400 -200
@@ -194,15 +200,17 @@ class BEVFormerEncoder(TransformerLayerSequence):
             ref_3d_65[..., 1] /= 650
 
             # 30_30
-            ref_3d_30[..., 0:1] = ref_3d_30[..., 0:1] * 400 -200
-            ref_3d_30[..., 1:2] = ref_3d_30[..., 1:2] * 650 -350
-            ref_3d_30[ref_3d_30[:, :, :, 0] < -150] = 0
-            ref_3d_30[ref_3d_30[:, :, :, 0] > 150] = 0
-            ref_3d_30[ref_3d_30[:, :, :, 1] > 0] = 0
-            ref_3d_30[ref_3d_30[:, :, :, 1] < -300] = 0
-            ref_3d_30[..., 0] /= 400
-            ref_3d_30[..., 1] /= 650
-            ref_3d = torch.stack([ref_3d_65[0], ref_3d_30[0]], dim=0)
+            # ref_3d_30[..., 0:1] = ref_3d_30[..., 0:1] * 400 -200
+            # ref_3d_30[..., 1:2] = ref_3d_30[..., 1:2] * 650 -350
+            # ref_3d_30[ref_3d_30[:, :, :, 0] < -150] = 0
+            # ref_3d_30[ref_3d_30[:, :, :, 0] > 150] = 0
+            # ref_3d_30[ref_3d_30[:, :, :, 1] > 0] = 0
+            # ref_3d_30[ref_3d_30[:, :, :, 1] < -300] = 0
+            # ref_3d_30[..., 0] /= 400
+            # ref_3d_30[..., 1] /= 650
+            # ref_3d = torch.stack([ref_3d_65[0], ref_3d_30[0]], dim=0)
+            ref_3d = ref_3d_65
+
 
             # ref_3d_zero = torch.zeros([ref_2d.size(0), ref_2d.size(1), 9, ref_2d.size(3)], device=ref_2d.device, dtype=ref_2d.dtype)
             # step_y = 0.1 / bev_h
@@ -222,8 +230,10 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 ref_3d, self.pc_range, kwargs['img_metas'])
 
         # bug: this code should be 'shift_ref_2d = ref_2d.clone()', we keep this bug for reproducing our results in paper.
-        shift_ref_2d = copy.deepcopy(ref_2d)  # .clone()
-        shift_ref_2d += shift[:, None, None, :]
+        shift_ref_2d = ref_2d.clone() #copy.deepcopy(ref_2d)  # .clone()
+        
+        if shift is not None:
+            shift_ref_2d += shift[:, None, None, :]
 
         # (num_query, bs, embed_dims) -> (bs, num_query, embed_dims)
         bev_query = bev_query.permute(1, 0, 2)

@@ -57,7 +57,7 @@ class BEVFormer(MVXTwoStageDetector):
 
     def extract_img_feat(self, img, img_metas, len_queue=None):
         """Extract features of images."""
-        B = img.size(0)
+        B, N, C, H, W = img.size()
         if img is not None:
             
             # input_shape = img.shape[-2:]
@@ -65,11 +65,8 @@ class BEVFormer(MVXTwoStageDetector):
             # for img_meta in img_metas:
             #     img_meta.update(input_shape=input_shape)
 
-            if img.dim() == 5 and img.size(0) == 1:
-                img.squeeze_(dim=0)  # img.squeeze_()
-            elif img.dim() == 5 and img.size(0) > 1:
-                B, N, C, H, W = img.size()
-                img = img.reshape(B * N, C, H, W)
+            img = img.view(B * N, C, H, W)
+            
             if self.use_grid_mask:
                 img = self.grid_mask(img)
 
@@ -77,7 +74,7 @@ class BEVFormer(MVXTwoStageDetector):
             
             # from mmdet3d.utils.visualization import Visualizer
             # visualizer = Visualizer()
-            # visualizer(img[0], win_name="imgn")
+            # visualizer(img[-1], win_name="imgn")
             # visualizer(img_feats[0][0], win_name="0")
             # visualizer(img_feats[1][0], win_name="1")
             # visualizer(img_feats[2][0], win_name="2")
@@ -119,7 +116,8 @@ class BEVFormer(MVXTwoStageDetector):
                           semantic_indices,
                           img_metas,
                           gt_bboxes_ignore=None,
-                          prev_bev=None):
+                          prev_bev=None,
+                          points=None):
         """Forward function'
         Args:
             pts_feats (list[torch.Tensor]): Features of point cloud branch
@@ -136,7 +134,8 @@ class BEVFormer(MVXTwoStageDetector):
         """
 
         outs = self.pts_bbox_head(
-            pts_feats, img_metas, prev_bev)  #这里是一个整体，直接获得计算loss所需要的logits
+            pts_feats, img_metas, prev_bev, points=points)  #这里是一个整体，直接获得计算loss所需要的logits
+        
         # 1. single det task
         if 'seg_preds' not in outs.keys():
             det_loss_inputs = [gt_bboxes_3d, gt_labels_3d, outs]
@@ -172,6 +171,10 @@ class BEVFormer(MVXTwoStageDetector):
         list[list[dict]]), with the outer list indicating test time
         augmentations.
         """
+        # 转onnx
+        if isinstance(return_loss, dict):
+            return self.forward_test(return_loss["img_metas"], return_loss["img"])
+
         if return_loss:
             return self.forward_train(**kwargs)
         else:
@@ -248,7 +251,7 @@ class BEVFormer(MVXTwoStageDetector):
         img = img[:, -1, ...] # 当前时刻图像
 
         prev_img_metas = copy.deepcopy(img_metas) # 这里没写好吧，但是影响不大
-        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) # 获取前3帧的bev特征
+        prev_bev = self.obtain_history_bev(prev_img, prev_img_metas) if len_queue > 1 else None # 获取前3帧的bev特征
 
         img_metas = [each[len_queue-1] for each in img_metas]
         if not img_metas[0]['prev_bev_exists']:
@@ -257,7 +260,7 @@ class BEVFormer(MVXTwoStageDetector):
         losses = dict()
         losses_pts = self.forward_pts_train(img_feats, gt_bboxes_3d,
                                             gt_labels_3d, semantic_indices,
-                                            img_metas, gt_bboxes_ignore, prev_bev)
+                                            img_metas, gt_bboxes_ignore, prev_bev, points)
 
         losses.update(losses_pts)
         return losses
@@ -298,9 +301,9 @@ class BEVFormer(MVXTwoStageDetector):
 
         return bbox_results
 
-    def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False):
+    def simple_test_pts(self, x, img_metas, prev_bev=None, rescale=False, points=None):
         """Test function"""
-        outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev)
+        outs = self.pts_bbox_head(x, img_metas, prev_bev=prev_bev, points=points)
         # 1. single det task
         if 'seg_preds' not in outs.keys():
 
@@ -334,8 +337,9 @@ class BEVFormer(MVXTwoStageDetector):
         img_feats = self.extract_feat(img=img, img_metas=img_metas)
 
         result_list = [dict() for i in range(len(img_metas))]
+        points = [kwargs["points"][1][0]] if "points" in kwargs else None
         new_prev_bev, seg_preds, bbox_pts = self.simple_test_pts(
-            img_feats, img_metas, prev_bev, rescale=rescale)
+            img_feats, img_metas, prev_bev, rescale=rescale, points=points)
 
         # 三种模式
         #1. single det

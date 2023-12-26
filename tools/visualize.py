@@ -12,6 +12,8 @@ from torchpack import distributed as dist
 from torchpack.utils.config import configs
 # from torchpack.utils.tqdm import tqdm
 import cv2
+import sys
+sys.path.insert(0, "/tmp/algorithm")
 
 from mmdet3d.core import LiDARInstance3DBoxes
 from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
@@ -41,11 +43,11 @@ def show_seg(labels, car_img):
 
     # 这里需要水平翻转，因为这样才可以保证与在图像坐标系下，与习惯相同
 
-    img = np.flip(img, axis=0)
+    # img = np.flip(img, axis=0)
     # 可视化小车
-    car_img = np.where(car_img == [0, 0, 0], [255, 255, 255], car_img)[16: 84, 5:, :]
-    car_img = cv2.resize(car_img.astype(np.uint8), (30, 16))
-    img[img.shape[0] // 2 - 8: img.shape[0] // 2 + 8, img.shape[1] // 2 - 15: img.shape[1] // 2 + 15, :] = car_img
+    car_img = np.where(car_img == [0, 0, 0], [255, 255, 255], car_img)
+    car_img = cv2.resize(car_img.astype(np.uint8), (16, 26))
+    img[300 - 13: 300 + 13, img.shape[1] // 2 - 8: img.shape[1] // 2 + 8, :] = car_img
 
     return img
 
@@ -123,7 +125,11 @@ def main() -> None:
             model = MMDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()])
         model.eval()
 
+    # temp_data = []
+
     for data in dataflow:
+        # temp = {"token": data["img_metas"][0].data[0][0]["scene_token"], "img": data["img"][0].data[0][0], "can_bus":data["img_metas"][0].data[0][0]["can_bus"]}
+        # temp_data.append(temp)
         if "metas" in data:
             metas = data["metas"].data[0][0]
             name = "{}-{}".format(metas["timestamp"], metas["token"])
@@ -186,7 +192,7 @@ def main() -> None:
                     classes=cfg.object_classes,
                 )
 
-        if "points" in data:
+        if "points" in data and lidar2image is not None:
             lidar = data["points"].data[0][0].numpy()
             visualize_lidar(
                 os.path.join(args.out_dir, "lidar", f"{name}.png"),
@@ -235,6 +241,10 @@ def main() -> None:
                 mmcv.mkdir_or_exist(os.path.dirname(fpath))
                 mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
+
+    # import pickle
+    # with open("runs/temp_data.pickle", "wb") as f:
+    #     pickle.dump(temp_data, f)
 
 if __name__ == "__main__":
     main()

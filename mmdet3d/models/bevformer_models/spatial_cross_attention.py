@@ -60,11 +60,11 @@ class CustomCrossAttention(BaseModule):
         self.output_proj = nn.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
 
-        # self.positional_encoding = build_positional_encoding(
-        #     dict(type='SinePositionalEncoding',
-        #         num_feats=128,
-        #         normalize=True)
-        # )
+        self.positional_encoding = build_positional_encoding(
+            dict(type='SinePositionalEncoding',
+                num_feats=128,
+                normalize=True)
+        )
 
         self.init_weight()
 
@@ -122,8 +122,11 @@ class CustomCrossAttention(BaseModule):
         # queries_rebatch = queries_rebatch.view(bs*num_cams, max_len, self.embed_dims)
         # reference_points_rebatch = reference_points_rebatch.view(bs*num_cams, max_len, D, 2)
 
-        queries_rebatch =  torch.stack([query[0], query[0]], dim=0)
-        reference_points_rebatch = reference_points
+        # queries_rebatch =  torch.stack([query[0], query[0]], dim=0)
+        queries_rebatch = query.repeat(self.num_cams, 1, 1)
+
+        # reference_points_rebatch = torch.stack([reference_points[0], reference_points[0]], dim=0)
+        reference_points_rebatch = reference_points.repeat(self.num_cams, 1, 1, 1)
 
         # query_mask = torch.zeros((queries_rebatch.size(0), int(queries_rebatch.size(1) ** 0.5), int(queries_rebatch.size(1) ** 0.5)), device=queries_rebatch.device).to(queries_rebatch.dtype)
         # query_pos = self.positional_encoding(query_mask).to(queries_rebatch.dtype)
@@ -137,15 +140,12 @@ class CustomCrossAttention(BaseModule):
                                             reference_points=reference_points_rebatch, spatial_shapes=spatial_shapes,
                                             level_start_index=level_start_index) # .view(bs, self.num_cams, max_len, self.embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
-        queries = queries.permute(1, 2, 0)
-
-        # # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
-        queries = queries.view(num_query, embed_dims, bs, num_cams)
-        queries = queries.mean(-1)
-
-        # (num_query, embed_dims, bs)-> (bs, num_query, embed_dims)
-        queries = queries.permute(2, 0, 1)
-
+        
+        # queries = queries.permute(1, 2, 0)
+        # queries = queries.view(num_query, embed_dims, bs, num_cams)
+        # queries = queries.mean(-1)
+        # queries = queries.permute(2, 0, 1)
+        queries = torch.mean(queries, keepdim=True, dim=0)
         queries = self.output_proj(queries)
 
         return self.dropout(queries) + inp_residual
