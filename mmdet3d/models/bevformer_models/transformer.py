@@ -130,8 +130,7 @@ class PerceptionTransformer(BaseModule):
         obtain bev features.
         """
 
-        bs = mlvl_feats[0].size(0)
-        bev_queries = bev_queries.unsqueeze(1).repeat(1, bs, 1)
+        bev_queries = bev_queries.unsqueeze(1)
         bev_pos = bev_pos.flatten(2).permute(2, 0, 1)
 
         # obtain rotation angle and shift with ego motion
@@ -156,7 +155,7 @@ class PerceptionTransformer(BaseModule):
             shift = bev_queries.new_tensor(
                 [shift_x, shift_y]).permute(1, 0)  # xy, bs -> bs, xy
         else:
-            shift = bev_queries.new_tensor([np.array([0.0]), np.array([0.0])]).permute(1, 0)
+            shift = None
 
         if prev_bev is not None:
             if prev_bev.shape[1] == bev_h * bev_w:
@@ -181,27 +180,45 @@ class PerceptionTransformer(BaseModule):
             can_bus = self.can_bus_mlp(can_bus)[None, :, :]
             bev_queries = bev_queries + can_bus * self.use_can_bus
 
-        feat_flatten = []
-        spatial_shapes = []
+        # feat_flatten = []
+        # spatial_shapes = []
+        # for lvl, feat in enumerate(mlvl_feats):
+        #     bs, num_cam, c, h, w = feat.shape
+        #     spatial_shape = (h, w)
+        #     feat = feat.flatten(3).permute(1, 0, 3, 2)
+        #     if self.use_cams_embeds:
+        #         feat = feat + self.cams_embeds[:, None, None, :].to(feat.dtype)
+        #     feat = feat + self.level_embeds[None,
+        #                                     None, lvl:lvl + 1, :].to(feat.dtype)
+        #     spatial_shapes.append(spatial_shape)
+        #     feat_flatten.append(feat)
+
+        # feat_flatten = torch.cat(feat_flatten, 2)
+        # spatial_shapes = torch.as_tensor(
+        #     spatial_shapes, dtype=torch.long, device=bev_pos.device)
+        # level_start_index = torch.cat((spatial_shapes.new_zeros(
+        #     (1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
+
+        # feat_flatten = feat_flatten.permute(
+        #     0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims)
+
+        feat_flatten = mlvl_feats[0].new_zeros(
+            self.num_cams, 1, 0, self.embed_dims, dtype=torch.float32
+        )
+        spatial_shapes = mlvl_feats[0].new_zeros(len(mlvl_feats), 2, dtype=torch.long)
+
         for lvl, feat in enumerate(mlvl_feats):
-            bs, num_cam, c, h, w = feat.shape
-            spatial_shape = (h, w)
+            _, _, _, h, w = feat.shape
             feat = feat.flatten(3).permute(1, 0, 3, 2)
             if self.use_cams_embeds:
-                feat = feat + self.cams_embeds[:, None, None, :].to(feat.dtype)
-            feat = feat + self.level_embeds[None,
-                                            None, lvl:lvl + 1, :].to(feat.dtype)
-            spatial_shapes.append(spatial_shape)
-            feat_flatten.append(feat)
+                feat = feat + self.cams_embeds.view(self.num_cams, 1, 1, self.embed_dims)
+            feat = feat + self.level_embeds[lvl].view(1, 1, 1, -1)
+            spatial_shapes[lvl, 0] = int(h)
+            spatial_shapes[lvl, 1] = int(w)
+            feat_flatten = torch.cat([feat_flatten, feat], dim=2)
 
-        feat_flatten = torch.cat(feat_flatten, 2)
-        spatial_shapes = torch.as_tensor(
-            spatial_shapes, dtype=torch.long, device=bev_pos.device)
-        level_start_index = torch.cat((spatial_shapes.new_zeros(
-            (1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
-
-        feat_flatten = feat_flatten.permute(
-            0, 2, 1, 3)  # (num_cam, H*W, bs, embed_dims)
+        feat_flatten = feat_flatten.view(self.num_cams, -1, 1, self.embed_dims)
+        level_start_index = torch.cat((spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]))
 
         bev_embed = self.encoder(
             bev_queries,

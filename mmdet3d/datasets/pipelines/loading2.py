@@ -39,7 +39,8 @@ class LoadMultiImageCustom(object):
         results['filename'] = filename
         results['img'] = img
 
-        results['points'] = BasePoints(results['points'], points_dim=results['points'].shape[-1])
+        if "points" in results:
+            results['points'] = BasePoints(results['points'], points_dim=results['points'].shape[-1])
 
         if self.label_size is not None:
             semantic_indices = mmcv.imread(results["semantic_indices_file"], flag='grayscale')

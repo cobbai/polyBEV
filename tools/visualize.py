@@ -125,7 +125,11 @@ def main() -> None:
             model = MMDataParallel(model.cuda(), device_ids=[torch.cuda.current_device()])
         model.eval()
 
+    # temp_data = []
+
     for data in dataflow:
+        # temp = {"token": data["img_metas"][0].data[0][0]["scene_token"], "img": data["img"][0].data[0][0], "can_bus":data["img_metas"][0].data[0][0]["can_bus"]}
+        # temp_data.append(temp)
         if "metas" in data:
             metas = data["metas"].data[0][0]
             name = "{}-{}".format(metas["timestamp"], metas["token"])
@@ -237,6 +241,10 @@ def main() -> None:
                 mmcv.mkdir_or_exist(os.path.dirname(fpath))
                 mmcv.imwrite(show_seg(semantic.squeeze(), car_img_cv), fpath)
 
+
+    # import pickle
+    # with open("runs/temp_data.pickle", "wb") as f:
+    #     pickle.dump(temp_data, f)
 
 if __name__ == "__main__":
     main()

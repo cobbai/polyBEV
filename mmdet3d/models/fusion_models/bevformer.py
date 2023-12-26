@@ -57,7 +57,7 @@ class BEVFormer(MVXTwoStageDetector):
 
     def extract_img_feat(self, img, img_metas, len_queue=None):
         """Extract features of images."""
-        B = img.size(0)
+        B, N, C, H, W = img.size()
         if img is not None:
             
             # input_shape = img.shape[-2:]
@@ -65,11 +65,8 @@ class BEVFormer(MVXTwoStageDetector):
             # for img_meta in img_metas:
             #     img_meta.update(input_shape=input_shape)
 
-            if img.dim() == 5 and img.size(0) == 1:
-                img.squeeze_(dim=0)  # img.squeeze_()
-            elif img.dim() == 5 and img.size(0) > 1:
-                B, N, C, H, W = img.size()
-                img = img.reshape(B * N, C, H, W)
+            img = img.view(B * N, C, H, W)
+            
             if self.use_grid_mask:
                 img = self.grid_mask(img)
 

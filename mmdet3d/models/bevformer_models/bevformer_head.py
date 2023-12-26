@@ -46,44 +46,37 @@ def calculate_birds_eye_view_parameters(x_bounds, y_bounds, z_bounds):
 
 class BevFeatureSlicer(nn.Module):
     # crop the interested area in BEV feature for semantic map segmentation
-    def __init__(self, grid_conf, map_grid_conf):
+    def __init__(self, map_grid_conf):
         super().__init__()
 
-        if grid_conf == map_grid_conf:
-            self.identity_mapping = True
-        else:
-            self.identity_mapping = False
+        self.identity_mapping = False
 
-            bev_resolution, bev_start_position, bev_dimension = calculate_birds_eye_view_parameters(
-                grid_conf['xbound'], grid_conf['ybound'], grid_conf['zbound'],
-            )
+        map_bev_resolution, map_bev_start_position, map_bev_dimension = calculate_birds_eye_view_parameters(
+            map_grid_conf['xbound'], map_grid_conf['ybound'], map_grid_conf['zbound'],
+        )
 
-            map_bev_resolution, map_bev_start_position, map_bev_dimension = calculate_birds_eye_view_parameters(
-                map_grid_conf['xbound'], map_grid_conf['ybound'], map_grid_conf['zbound'],
-            )
+        self.map_x = torch.arange(
+            map_bev_start_position[0], map_grid_conf['xbound'][1], map_bev_resolution[0])
 
-            self.map_x = torch.arange(
-                map_bev_start_position[0], map_grid_conf['xbound'][1], map_bev_resolution[0])
+        self.map_y = torch.arange(
+            map_bev_start_position[1], map_grid_conf['ybound'][1], map_bev_resolution[1])
 
-            self.map_y = torch.arange(
-                map_bev_start_position[1], map_grid_conf['ybound'][1], map_bev_resolution[1])
+        # convert to normalized coords
+        # self.norm_map_x = self.map_x / (- bev_start_position[0])
+        # self.norm_map_y = self.map_y / (- bev_start_position[1])
 
-            # convert to normalized coords
-            # self.norm_map_x = self.map_x / (- bev_start_position[0])
-            # self.norm_map_y = self.map_y / (- bev_start_position[1])
+        self.norm_map_x = (self.map_x - map_grid_conf["xbound"][0]) / (map_grid_conf["xbound"][1] - map_grid_conf["xbound"][0]) * 2 - 1
+        self.norm_map_y = (self.map_y - map_grid_conf["ybound"][0]) / (map_grid_conf["ybound"][1] - map_grid_conf["ybound"][0]) * 2 - 1
 
-            self.norm_map_x = (self.map_x - map_grid_conf["xbound"][0]) / (map_grid_conf["xbound"][1] - map_grid_conf["xbound"][0]) * 2 - 1
-            self.norm_map_y = (self.map_y - map_grid_conf["ybound"][0]) / (map_grid_conf["ybound"][1] - map_grid_conf["ybound"][0]) * 2 - 1
+        # vision 1 失败
+        self.map_grid = torch.stack(torch.meshgrid(
+            self.norm_map_x, self.norm_map_y), dim=2).permute(1, 0, 2)
+        # self.map_grid = torch.stack(torch.meshgrid(
+        #     self.norm_map_x, self.norm_map_y, indexing='xy'), dim=2)
 
-            # vision 1 失败
-            self.map_grid = torch.stack(torch.meshgrid(
-                self.norm_map_x, self.norm_map_y), dim=2).permute(1, 0, 2)
-            # self.map_grid = torch.stack(torch.meshgrid(
-            #     self.norm_map_x, self.norm_map_y, indexing='xy'), dim=2)
-
-             # vision 2 test
-            # self.map_grid = torch.stack(torch.meshgrid(
-            #     self.norm_map_x, self.norm_map_y), dim=2)
+            # vision 2 test
+        # self.map_grid = torch.stack(torch.meshgrid(
+        #     self.norm_map_x, self.norm_map_y), dim=2)
 
     def forward(self, x):
         # x: bev feature map tensor of shape (b, c, h, w)
@@ -161,13 +154,15 @@ class BEVFormerHead(DETRHead):
             *args, transformer=transformer, **kwargs)
         self.code_weights = nn.Parameter(torch.tensor(
             self.code_weights, requires_grad=False), requires_grad=False)
+        
         # 如果包含分割任务，则实例化分割子网络以及loss
         if self.task.get('seg'):
             self.map_grid_conf = map_grid_conf
             self.det_grid_conf = det_grid_conf
-            self.feat_cropper = BevFeatureSlicer(self.det_grid_conf, self.map_grid_conf)
+            self.feat_cropper = BevFeatureSlicer(self.map_grid_conf)
             self.seg_decoder = build_seg_encoder(seg_encoder)
             self.loss_seg = build_loss(loss_seg)
+
         # 添加 lidar 点云任务
         if self.task.get("lidar"):
             self.lidar_encoder = nn.ModuleDict()
@@ -270,14 +265,13 @@ class BEVFormerHead(DETRHead):
                 Shape [nb_dec, bs, num_query, 9].
         """
 
-        bs, num_cam, _, _, _ = mlvl_feats[0].shape
         dtype = mlvl_feats[0].dtype
-        object_query_embeds = self.query_embedding.weight.to(dtype)
-        bev_queries = self.bev_embedding.weight.to(dtype)
+        object_query_embeds = self.query_embedding.weight
+        bev_queries = self.bev_embedding.weight
 
-        bev_mask = torch.zeros((bs, self.bev_h, self.bev_w),
+        bev_mask = torch.zeros((1, self.bev_h, self.bev_w),
                                device=bev_queries.device).to(dtype)
-        bev_pos = self.positional_encoding(bev_mask).to(dtype)
+        bev_pos = self.positional_encoding(bev_mask)
 
         # PerceptionTransformer
         if only_bev:  # only use encoder to obtain BEV features, TODO: refine the workaround
@@ -333,7 +327,7 @@ class BEVFormerHead(DETRHead):
             
             # TEST 02 转换HW维度，再竖直翻转 small_seg_trans_flip.py 都一样配置，只是区分了对其进行的操作。epoch3 40.3%miou
             # seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 1, 0)  # b, c , w, h
-            seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, bs, -1).permute(2, 3, 0, 1)
+            seg_bev = bev_embed.reshape(self.bev_h, self.bev_w, 1, -1).permute(2, 3, 0, 1)
 
             # if img_metas[0]["scene_token"] == 2912981.9:
             #     print(img_metas[0]["scene_token"])

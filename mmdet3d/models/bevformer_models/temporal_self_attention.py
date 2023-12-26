@@ -248,17 +248,12 @@ class TemporalSelfAttention(BaseModule):
             output = multi_scale_deformable_attn_pytorch(
                 value, spatial_shapes, sampling_locations, attention_weights)
 
-        # output shape (bs*num_bev_queue, num_query, embed_dims)
-        # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
-        output = output.permute(1, 2, 0)
+        # output = output.permute(1, 2, 0)
+        # output = output.view(num_query, embed_dims, bs, self.num_bev_queue)
+        # output = output.mean(-1)
+        # output = output.permute(2, 0, 1)
 
-        # fuse history value and current value
-        # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
-        output = output.view(num_query, embed_dims, bs, self.num_bev_queue)
-        output = output.mean(-1)
-
-        # (num_query, embed_dims, bs)-> (bs, num_query, embed_dims)
-        output = output.permute(2, 0, 1)
+        output = torch.mean(output, keepdim=True, dim=0)
 
         output = self.output_proj(output)
 

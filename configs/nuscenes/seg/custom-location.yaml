@@ -44,6 +44,7 @@ TemporalSelfAttention:
   num_levels: 1
 CustomCrossAttention:
   type: CustomCrossAttention
+  num_cams: 2
   embed_dims: ${_dim_}
   deformable_attention:
     type: MSDeformableAttention3D
@@ -69,7 +70,7 @@ model:
     style: pytorch
     with_cp: False
     dcn:
-      type: DCNv2
+      type: DCNv2  # DCNv2P
       deform_groups: 1
       fallback_on_stride: False
     stage_with_dcn: [False, False, True, True]
@@ -111,7 +112,7 @@ model:
       num_cams: 2
       rotate_prev_bev: True
       # rotate_center: ${(bev_h_ // 2, bev_w_ // 2)}
-      use_shift: True
+      use_shift: False
       use_can_bus: False
       embed_dims: ${_dim_}
       encoder:
@@ -242,7 +243,7 @@ train_pipeline:
     with_label: false
   -
     type: CustomCollect3D
-    keys: ['img', 'semantic_indices', "points"]
+    keys: ['img', 'semantic_indices']
     meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
 
 test_pipeline:
@@ -270,13 +271,13 @@ test_pipeline:
         with_label: false
       -
         type: CustomCollect3D
-        keys: ['img', 'semantic_indices', "points"]
+        keys: ['img', 'semantic_indices']
         meta_keys: ["scene_token", "filename", "img_norm_cfg", "prev", "next", "can_bus"]
       
 
 data:
   samples_per_gpu: 1
-  workers_per_gpu: 4
+  workers_per_gpu: 0
   train:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -345,7 +346,7 @@ evaluation:
   interval: 1
   pipeline: ${test_pipeline}
 
-total_epochs: 50
+total_epochs: 24
 # load_from: pretrained/r101_dcn_fcos3d_pretrain.pth
 runner:
   type: EpochBasedRunner
